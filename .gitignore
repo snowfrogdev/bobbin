@@ -23,3 +23,20 @@ target
 # IDE
 .vscode/
 .claude/settings.local.json
+
+# Godot 4+ specific ignores
+.godot/
+.nomedia
+.import/
+export.cfg
+export_credentials.cfg
+*.translation
+
+# MacOS system files
+.DS_Store
+
+# Bobbin addon symlinks in test projects (created via junction/symlink)
+test-projects/godot/*/addons/bobbin/
+
+# Compiled GDExtension binaries (built from source)
+bindings/godot/addon/bobbin/bin/

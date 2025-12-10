@@ -53,3 +53,13 @@ claims related to its use.
 Are you a studio lawyer whose eye is twitching because this isn't MIT?
 Let's chat. I don't bite, and I'm open to alternative arrangements for
 the right situation. <phil@snowfrog.dev>
+
+---
+
+## Third-Party Licenses
+
+### gdext (godot-rust)
+
+- License: [MPL-2.0](https://www.mozilla.org/en-US/MPL/2.0/)
+- Source: [github.com/godot-rust/gdext](https://github.com/godot-rust/gdext)
+- Used for: Godot GDExtension bindings
