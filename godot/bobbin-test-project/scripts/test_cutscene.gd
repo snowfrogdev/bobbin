@@ -34,8 +34,7 @@ func _input(event: InputEvent) -> void:
 
 
 func _start_cutscene() -> void:
-	Bobbin.reset()
-	Bobbin.advance()
+	Bobbin.start("res://dialog/intro.bobbin")
 	_show_current_line()
 	_is_active = true
 
