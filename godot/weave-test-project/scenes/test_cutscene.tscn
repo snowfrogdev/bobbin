@@ -1,0 +1,60 @@
+[gd_scene load_steps=3 format=3 uid="uid://ca43g8wjyhecf"]
+
+[ext_resource type="Script" uid="uid://dkrbx3p2ho668" path="res://scripts/test_cutscene.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+content_margin_left = 20.0
+content_margin_top = 20.0
+content_margin_right = 20.0
+content_margin_bottom = 20.0
+bg_color = Color(0.12, 0.12, 0.15, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+
+[node name="TestCutscene" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.06, 0.12, 1)
+
+[node name="DialogPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.7
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="DialogPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 40
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 40
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="DialogPanel/MarginContainer"]
+layout_mode = 2
+
+[node name="DialogLabel" type="RichTextLabel" parent="DialogPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+
+[node name="ContinueIndicator" type="Label" parent="DialogPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+horizontal_alignment = 2
