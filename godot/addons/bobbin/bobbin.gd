@@ -1,15 +1,31 @@
 class_name Bobbin
 
-# Hardcoded dialog (temporary - will come from interpreter later)
-static var _lines: Array[String] = [
-	"Long ago, in a kingdom by the sea...",
-	"There lived a young wanderer with no name.",
-	"They say she came from the eastern mountains.",
-	"But no one truly knew her story.",
-	"Until now."
-]
+static var _lines: Array[String] = []
+static var _index: int = 0
 
-static var _index: int = -1
+
+# --- Commands (change state, return nothing) ---
+
+static func start(path: String) -> void:
+	var file := FileAccess.open(path, FileAccess.READ)
+	assert(file != null, "Bobbin.start() failed to open: " + path)
+	if file == null:
+		return
+
+	_lines.clear()
+	while not file.eof_reached():
+		var line := file.get_line()
+		if line.strip_edges() != "":
+			_lines.append(line)
+
+	_index = 0
+
+
+static func advance() -> void:
+	if not has_more():
+		assert(false, "Bobbin.advance() called when no more lines")
+		return
+	_index += 1
 
 
 # --- Queries (return data, don't change state) ---
@@ -22,16 +38,3 @@ static func current_line() -> String:
 
 static func has_more() -> bool:
 	return _index + 1 < _lines.size()
-
-
-# --- Commands (change state, return nothing) ---
-
-static func advance() -> void:
-	if not has_more():
-		assert(false, "Bobbin.advance() called when no more lines")
-		return
-	_index += 1
-
-
-static func reset() -> void:
-	_index = -1
