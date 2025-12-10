@@ -2,6 +2,25 @@
 
 Thanks for wanting to contribute!
 
+## Development Setup
+
+After cloning the repo, run the setup script to link the Bobbin addon into the Godot test project:
+
+**Windows (PowerShell):**
+
+```powershell
+.\scripts\setup.ps1
+```
+
+**Linux/Mac:**
+
+```bash
+chmod +x scripts/setup.sh
+./scripts/setup.sh
+```
+
+This creates a junction (Windows) or symlink (Linux/Mac) so that changes to `godot/addons/bobbin/` are immediately reflected in the test project. You only need to run this once per clone.
+
 ## Before you submit
 
 By submitting a pull request, you agree that:

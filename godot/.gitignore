@@ -12,3 +12,7 @@ export_credentials.cfg
 
 # MacOS system files
 .DS_Store
+
+# Bobbin addon in test project (created by setup script via symlink/junction)
+# Other addons in the test project can still be tracked normally
+bobbin-test-project/addons/bobbin/
