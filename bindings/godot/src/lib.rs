@@ -1,5 +1,5 @@
 use godot::prelude::*;
-use bobbin_interpreter::Interpreter;
+use bobbin_runtime::Runtime;
 
 struct BobbinExtension;
 
@@ -10,7 +10,7 @@ unsafe impl ExtensionLibrary for BobbinExtension {}
 #[class(base=RefCounted)]
 pub struct BobbinInterpreter {
     base: Base<RefCounted>,
-    inner: Interpreter,
+    inner: Runtime,
 }
 
 #[godot_api]
@@ -18,7 +18,7 @@ impl IRefCounted for BobbinInterpreter {
     fn init(base: Base<RefCounted>) -> Self {
         Self {
             base,
-            inner: Interpreter::new(),
+            inner: Runtime::new(),
         }
     }
 }

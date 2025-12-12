@@ -7,5 +7,5 @@ edition = "2024"
 crate-type = ["cdylib"]
 
 [dependencies]
-bobbin-interpreter = { path = "../../interpreter" }
+bobbin-runtime = { path = "../../runtime" }
 godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
