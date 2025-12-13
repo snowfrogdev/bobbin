@@ -7,27 +7,23 @@ struct BobbinExtension;
 unsafe impl ExtensionLibrary for BobbinExtension {}
 
 #[derive(GodotClass)]
-#[class(base=RefCounted)]
-pub struct BobbinInterpreter {
+#[class(base=RefCounted, no_init)]
+pub struct BobbinRuntime {
     base: Base<RefCounted>,
     inner: Runtime,
 }
 
 #[godot_api]
-impl IRefCounted for BobbinInterpreter {
-    fn init(base: Base<RefCounted>) -> Self {
-        Self {
-            base,
-            inner: Runtime::new(),
-        }
-    }
-}
-
-#[godot_api]
-impl BobbinInterpreter {
+impl BobbinRuntime {
     #[func]
-    fn load_content(&mut self, content: GString) {
-        self.inner.load_content(&content.to_string());
+    fn from_string(content: GString) -> Option<Gd<Self>> {
+        match Runtime::new(&content.to_string()) {
+            Ok(runtime) => Some(Gd::from_init_fn(|base| Self { base, inner: runtime })),
+            Err(e) => {
+                godot_error!("Failed to load bobbin script: {:?}", e);
+                None
+            }
+        }
     }
 
     #[func]
