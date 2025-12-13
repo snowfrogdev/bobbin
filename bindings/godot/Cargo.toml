@@ -8,4 +8,8 @@ crate-type = ["cdylib"]
 
 [dependencies]
 bobbin-runtime = { path = "../../runtime" }
-godot = { git = "https://github.com/godot-rust/gdext", branch = "master" }
+
+[dependencies.godot]
+git = "https://github.com/godot-rust/gdext"
+branch = "master"
+features = ["api-custom", "experimental-wasm", "lazy-function-tables"]
