@@ -25,4 +25,4 @@ char    = ? any character except newline ? ;
 
 - Blank lines are skipped at the lexical level
 - Space required after `-` for choices
-- STRING is any line not starting with `- `
+- STRING is any line not starting with `-` followed by a space
