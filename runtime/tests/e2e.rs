@@ -4,8 +4,7 @@ use bobbin_runtime::Runtime;
 fn test_simple_lines() {
     let source = include_str!("fixtures/simple_lines.bobbin");
 
-    let mut runtime = Runtime::new();
-    runtime.load_content(source);
+    let mut runtime = Runtime::new(source).unwrap();
 
     assert_eq!(runtime.current_line(), "Hello world.");
     assert!(runtime.has_more());
@@ -23,8 +22,7 @@ fn test_simple_lines() {
 fn test_empty_lines_skipped() {
     let source = include_str!("fixtures/empty_lines.bobbin");
 
-    let mut runtime = Runtime::new();
-    runtime.load_content(source);
+    let mut runtime = Runtime::new(source).unwrap();
 
     assert_eq!(runtime.current_line(), "Line one.");
     runtime.advance();
@@ -34,8 +32,7 @@ fn test_empty_lines_skipped() {
 
 #[test]
 fn test_empty_source() {
-    let mut runtime = Runtime::new();
-    runtime.load_content("");
+    let runtime = Runtime::new("").unwrap();
 
     assert_eq!(runtime.current_line(), "");
     assert!(!runtime.has_more());

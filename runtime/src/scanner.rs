@@ -1,13 +1,14 @@
-struct Token<'a> {
-    kind: TokenKind,
-    lexeme: &'a str,
-    span: Span,
+#[derive(Debug, Clone, Copy)]
+pub struct Token<'a> {
+    pub kind: TokenKind,
+    pub lexeme: &'a str,
+    pub span: Span,
 }
 
-enum TokenKind {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenKind {
     String,
     Eof,
-    Error,
     NewLine,
 }
 
@@ -17,17 +18,41 @@ pub struct Span {
     pub end: usize,
 }
 
-struct Scanner<'a> {
-  source: &'a str,
-  /// Byte offset where current lexeme starts
-  start: usize,
-  /// Byte offset of current position
-  current: usize,
-  line: usize,
+/// Convert byte offset to (line, column), both 1-indexed.
+pub fn offset_to_position(source: &str, offset: usize) -> (usize, usize) {
+    let mut line = 1;
+    let mut col = 1;
+    for (i, ch) in source.char_indices() {
+        if i >= offset {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            col = 1;
+        } else {
+            col += 1;
+        }
+    }
+    (line, col)
+}
+
+#[derive(Debug)]
+pub enum LexicalError {
+    Unexpected { message: &'static str, span: Span },
+}
+
+#[derive(Debug)]
+pub struct Scanner<'a> {
+    source: &'a str,
+    /// Byte offset where current lexeme starts
+    start: usize,
+    /// Byte offset of current position
+    current: usize,
+    line: usize,
 }
 
 impl<'a> Scanner<'a> {
-    fn new(source: &'a str) -> Self {
+    pub fn new(source: &'a str) -> Self {
         Self {
             source,
             start: 0,
@@ -36,36 +61,43 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn scan_token(&mut self) -> Token<'a> {
+    pub fn tokens(mut self) -> impl Iterator<Item = Result<Token<'a>, LexicalError>> {
+        std::iter::from_fn(move || {
+            let result = self.scan_token();
+            match &result {
+                Ok(token) if token.kind == TokenKind::Eof => None,
+                _ => Some(result),
+            }
+        })
+    }
+
+    fn scan_token(&mut self) -> Result<Token<'a>, LexicalError> {
         self.start = self.current;
 
         if self.is_at_end() {
-            self.make_token(TokenKind::Eof)
+            Ok(self.make_token(TokenKind::Eof))
         } else {
             let character = self.advance();
 
             match character {
-              Some('\n') => {
-                self.line += 1;
-                self.make_token(TokenKind::NewLine)
-              }
-              Some('\r') => {
-                if self.peek() == Some('\n') {
-                  self.advance();
+                Some('\n') => {
+                    self.line += 1;
+                    Ok(self.make_token(TokenKind::NewLine))
                 }
-                self.line += 1;
-                self.make_token(TokenKind::NewLine)
-              }
-              _ => {
-                while !self.is_at_end() && !self.is_at_newline() {
-                  self.advance();
+                Some('\r') => {
+                    if self.peek() == Some('\n') {
+                        self.advance();
+                    }
+                    self.line += 1;
+                    Ok(self.make_token(TokenKind::NewLine))
                 }
-                self.make_token(TokenKind::String)
-              }
+                _ => {
+                    while !self.is_at_end() && !self.is_at_newline() {
+                        self.advance();
+                    }
+                    Ok(self.make_token(TokenKind::String))
+                }
             }
-
-
-            
         }
     }
 
@@ -74,7 +106,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn is_at_newline(&self) -> bool {
-      matches!(self.peek(), Some('\n') | Some('\r'))
+        matches!(self.peek(), Some('\n') | Some('\r'))
     }
 
     fn advance(&mut self) -> Option<char> {
@@ -98,10 +130,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn error_token(&self, message: &'a str) -> Token<'a> {
-        Token {
-            kind: TokenKind::Error,
-            lexeme: message,
+    fn error(&self, message: &'static str) -> LexicalError {
+        LexicalError::Unexpected {
+            message,
             span: Span {
                 start: self.start,
                 end: self.current,
