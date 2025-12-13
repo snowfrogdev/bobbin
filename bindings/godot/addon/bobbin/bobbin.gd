@@ -6,12 +6,11 @@ static var _runtime: BobbinRuntime = null
 # --- Commands (change state, return nothing) ---
 
 static func start(path: String) -> void:
-	var file := FileAccess.open(path, FileAccess.READ)
-	assert(file != null, "Bobbin.start() failed to open: " + path)
-	if file == null:
+	var script: BobbinScript = ResourceLoader.load(path, "BobbinScript")
+	assert(script != null, "Bobbin.start() failed to load: " + path)
+	if script == null:
 		return
-	var content := file.get_as_text()
-	_runtime = BobbinRuntime.from_string(content)
+	_runtime = BobbinRuntime.from_string(script.source_code)
 	assert(_runtime != null, "Bobbin.start() failed to parse: " + path)
 
 

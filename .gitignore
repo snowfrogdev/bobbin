@@ -31,6 +31,7 @@ target
 export.cfg
 export_credentials.cfg
 *.translation
+*.tmp
 
 # MacOS system files
 .DS_Store
