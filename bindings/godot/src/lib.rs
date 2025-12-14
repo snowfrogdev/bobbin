@@ -115,12 +115,30 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn can_make_function(&self) -> bool { false }
 
     // --- Code editing ---
-    fn validate(&self, _script: GString, _path: GString, _validate_functions: bool, _validate_errors: bool, _validate_warnings: bool, _validate_safe_lines: bool) -> Dictionary { Dictionary::new() }
+    fn validate(&self, _script: GString, _path: GString, _validate_functions: bool, _validate_errors: bool, _validate_warnings: bool, _validate_safe_lines: bool) -> Dictionary {
+        let mut dict = Dictionary::new();
+        dict.set("valid", true);
+        dict
+    }
     fn validate_path(&self, _path: GString) -> GString { GString::new() }
     fn find_function(&self, _function: GString, _code: GString) -> i32 { -1 }
     fn make_function(&self, _class_name: GString, _function_name: GString, _function_args: PackedStringArray) -> GString { GString::new() }
-    fn complete_code(&self, _code: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary { Dictionary::new() }
-    fn lookup_code(&self, _code: GString, _symbol: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary { Dictionary::new() }
+    fn complete_code(&self, _code: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary {
+        let mut dict = Dictionary::new();
+        dict.set("result", 0i32); // CodeCompletionResultKind::NONE
+        dict
+    }
+    fn lookup_code(&self, _code: GString, _symbol: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary {
+        // Godot 4.3 requires all six keys to be present
+        let mut dict = Dictionary::new();
+        dict.set("result", 7i32); // Error::ERR_UNAVAILABLE = 7 (no result found)
+        dict.set("type", 0i32);   // LOOKUP_RESULT_SCRIPT_LOCATION
+        dict.set("script", Variant::nil());
+        dict.set("class_name", GString::new());
+        dict.set("class_path", GString::new());
+        dict.set("location", -1i32);
+        dict
+    }
     fn auto_indent_code(&self, code: GString, _from_line: i32, _to_line: i32) -> GString { code }
 
     // --- External editor ---
@@ -146,8 +164,16 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn debug_get_current_stack_info(&mut self) -> Array<Dictionary> { Array::new() }
 
     // --- Reloading ---
-    fn reload_all_scripts(&mut self) {}
-    fn reload_tool_script(&mut self, _script: Option<Gd<Script>>, _soft_reload: bool) {}
+    fn reload_all_scripts(&mut self) {
+        // Godot handles iteration - each script's reload() is called separately
+    }
+    fn reload_tool_script(&mut self, script: Option<Gd<Script>>, _soft_reload: bool) {
+        if let Some(s) = script {
+            if let Ok(mut bobbin_script) = s.try_cast::<BobbinScript>() {
+                let _ = bobbin_script.bind_mut().reload(true);
+            }
+        }
+    }
 
     // --- Public API info ---
     fn get_public_functions(&self) -> Array<Dictionary> { Array::new() }
@@ -213,7 +239,25 @@ impl IScriptExtension for BobbinScript {
     fn instance_has(&self, _object: Gd<Object>) -> bool { false }
 
     // --- Reloading ---
-    fn reload(&mut self, _keep_state: bool) -> godot::global::Error { godot::global::Error::OK }
+    fn reload(&mut self, _keep_state: bool) -> godot::global::Error {
+        // Get file path from base
+        let path = self.base().get_path();
+        if path.is_empty() {
+            return godot::global::Error::OK; // No file, nothing to reload
+        }
+
+        // Read source from disk
+        let Some(file) = FileAccess::open(&path, ModeFlags::READ) else {
+            godot_error!("BobbinScript::reload: Failed to open {}", path);
+            return godot::global::Error::ERR_FILE_CANT_OPEN;
+        };
+        let content = file.get_as_text();
+
+        // Update source_code
+        self.source_code = content;
+
+        godot::global::Error::OK
+    }
     fn update_exports(&mut self) {}
 
     // --- Documentation ---
