@@ -1,7 +1,5 @@
-[env]
-# Local development: relative path to Godot binary
-# Container builds: GODOT4_BIN is set in container environment
-GODOT4_BIN = { value = "../../tools/godot/Godot_v4.3-stable_win64.exe", relative = true }
+# GODOT4_BIN is set by Docker container for builds
+# No local fallback - use Docker for all builds
 
 [target.x86_64-pc-windows-gnu]
 linker = "x86_64-w64-mingw32-gcc"
