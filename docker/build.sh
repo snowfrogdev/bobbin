@@ -3,7 +3,7 @@ set -e
 
 TARGET="${1:-windows}"
 BUILD_TYPE="${2:-release}"
-BIN_DIR="bindings/godot/addon/bobbin/bin"
+BIN_DIR="bindings/godot/addons/bobbin/bin"
 
 # Set cargo release flag and output suffix
 if [ "$BUILD_TYPE" = "release" ]; then

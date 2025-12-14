@@ -42,7 +42,7 @@ docker compose run --rm --build godot linux debug
 docker compose run --rm --build godot all debug
 ```
 
-Artifacts are automatically copied to `bindings/godot/addon/bobbin/bin/`.
+Artifacts are automatically copied to `bindings/godot/addons/bobbin/bin/`.
 
 ### Build Options
 
