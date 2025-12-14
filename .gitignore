@@ -27,13 +27,10 @@ target
 # Godot 4+ specific ignores
 .godot/
 .nomedia
-.import/
-*.import
 export.cfg
 export_credentials.cfg
 *.translation
 *.tmp
-*.uid
 
 # MacOS system files
 .DS_Store
