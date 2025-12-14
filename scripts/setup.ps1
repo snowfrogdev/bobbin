@@ -6,8 +6,8 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ProjectRoot = Split-Path -Parent $ScriptDir
 
-$AddonSrc = Join-Path $ProjectRoot "godot\addons\bobbin"
-$AddonDest = Join-Path $ProjectRoot "godot\bobbin-test-project\addons\bobbin"
+$AddonSrc = Join-Path $ProjectRoot "bindings\godot\addons\bobbin"
+$AddonDest = Join-Path $ProjectRoot "test-projects\godot\bobbin-test-project\addons\bobbin"
 $AddonsDir = Split-Path -Parent $AddonDest
 
 # Create addons directory if it doesn't exist

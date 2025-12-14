@@ -7,8 +7,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-ADDON_SRC="$PROJECT_ROOT/godot/addons/bobbin"
-ADDON_DEST="$PROJECT_ROOT/godot/bobbin-test-project/addons/bobbin"
+ADDON_SRC="$PROJECT_ROOT/bindings/godot/addons/bobbin"
+ADDON_DEST="$PROJECT_ROOT/test-projects/godot/bobbin-test-project/addons/bobbin"
 
 # Create addons directory if it doesn't exist
 mkdir -p "$(dirname "$ADDON_DEST")"
@@ -24,7 +24,7 @@ if [ "$CI" = "true" ]; then
     echo "Copied addon to test project (CI mode)"
 else
     # Local dev: symlink (live editing)
-    ln -s "../../addons/bobbin" "$ADDON_DEST"
+    ln -s "../../../../../bindings/godot/addons/bobbin" "$ADDON_DEST"
     echo "Symlinked addon to test project (dev mode)"
 fi
 
