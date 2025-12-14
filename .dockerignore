@@ -1,0 +1,19 @@
+# Build artifacts
+target/
+debug/
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+
+# Godot cache
+.godot/
+
+# Local tools (Godot binaries, etc.)
+tools/
+
+# Test projects (not needed for building)
+test-projects/

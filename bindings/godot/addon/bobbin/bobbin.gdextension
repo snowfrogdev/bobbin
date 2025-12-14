@@ -4,11 +4,11 @@ compatibility_minimum = 4.2
 reloadable = true
 
 [libraries]
-windows.debug.x86_64 = "res://addons/bobbin/bin/bobbin_godot.dll"
+windows.debug.x86_64 = "res://addons/bobbin/bin/bobbin_godot.debug.dll"
 windows.release.x86_64 = "res://addons/bobbin/bin/bobbin_godot.dll"
-linux.debug.x86_64 = "res://addons/bobbin/bin/libbobbin_godot.so"
+linux.debug.x86_64 = "res://addons/bobbin/bin/libbobbin_godot.debug.so"
 linux.release.x86_64 = "res://addons/bobbin/bin/libbobbin_godot.so"
-macos.debug = "res://addons/bobbin/bin/libbobbin_godot.dylib"
+macos.debug = "res://addons/bobbin/bin/libbobbin_godot.debug.dylib"
 macos.release = "res://addons/bobbin/bin/libbobbin_godot.dylib"
 web.debug.wasm32 = "res://addons/bobbin/bin/bobbin_godot.wasm"
 web.release.wasm32 = "res://addons/bobbin/bin/bobbin_godot.wasm"

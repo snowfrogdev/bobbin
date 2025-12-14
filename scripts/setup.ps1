@@ -39,3 +39,11 @@ if ($env:CI -eq "true") {
 }
 
 Write-Host "Done! Addon is now available at: $AddonDest"
+
+# Build Docker image for containerized builds
+Write-Host ""
+Write-Host "Building Docker image for containerized builds..."
+Push-Location $ProjectRoot
+docker compose build
+Pop-Location
+Write-Host "Docker image 'bobbin-build' ready!"

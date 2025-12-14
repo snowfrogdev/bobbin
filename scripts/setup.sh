@@ -29,3 +29,9 @@ else
 fi
 
 echo "Done! Addon is now available at: $ADDON_DEST"
+
+# Build Docker image for containerized builds
+echo ""
+echo "Building Docker image for containerized builds..."
+(cd "$PROJECT_ROOT" && docker compose build)
+echo "Docker image 'bobbin-build' ready!"

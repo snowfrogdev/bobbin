@@ -1,0 +1,6 @@
+services:
+  godot:
+    build: docker/
+    image: bobbin-build
+    volumes:
+      - .:/workspace
