@@ -1,3 +1,6 @@
+[env]
+GODOT4_BIN = { value = "../../tools/godot/Godot_v4.3-stable_win64.exe", relative = true }
+
 [target.wasm32-unknown-emscripten]
 rustflags = [
     "-C", "link-args=-pthread",

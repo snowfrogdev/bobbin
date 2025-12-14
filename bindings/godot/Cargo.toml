@@ -12,4 +12,4 @@ bobbin-runtime = { path = "../../runtime" }
 [dependencies.godot]
 git = "https://github.com/godot-rust/gdext"
 branch = "master"
-features = ["api-custom", "experimental-wasm", "lazy-function-tables"]
+features = ["api-custom", "experimental-wasm", "experimental-threads"]

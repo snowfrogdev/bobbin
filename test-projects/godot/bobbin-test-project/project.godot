@@ -15,10 +15,6 @@ run/main_scene="res://scenes/test_cutscene.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 config/icon="res://icon.svg"
 
-[editor_plugins]
-
-enabled=PackedStringArray("res://addons/bobbin/plugin.cfg")
-
 [rendering]
 
 renderer/rendering_method="gl_compatibility"
