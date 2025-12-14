@@ -125,7 +125,9 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn make_function(&self, _class_name: GString, _function_name: GString, _function_args: PackedStringArray) -> GString { GString::new() }
     fn complete_code(&self, _code: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary {
         let mut dict = Dictionary::new();
-        dict.set("result", 0i32); // CodeCompletionResultKind::NONE
+        dict.set("result", 0i32); // CodeCompletionKind::NONE
+        dict.set("call_hint", GString::new());
+        dict.set("force", false);
         dict
     }
     fn lookup_code(&self, _code: GString, _symbol: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary {
