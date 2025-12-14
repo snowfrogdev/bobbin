@@ -44,6 +44,3 @@ test-projects/godot/*/addons/bobbin/
 
 # Compiled GDExtension binaries (built from source)
 bindings/godot/addons/bobbin/bin/
-
-# Local tools (Godot binaries, etc.)
-tools/
