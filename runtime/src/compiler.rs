@@ -36,8 +36,21 @@ impl Compiler {
         match stmt {
             Stmt::Line { text, span } => {
                 let index = self.chunk.add_constant(Value::String(text.clone()));
-                self.chunk.emit(Instruction::Constant(index), span.start);
+                self.chunk.emit(Instruction::Constant { index }, span.start);
                 self.chunk.emit(Instruction::Line, span.start);
+            }
+            Stmt::ChoiceSet { choices } => {
+                for choice in choices {
+                    let index = self.chunk.add_constant(Value::String(choice.text.clone()));
+                    self.chunk
+                        .emit(Instruction::Constant { index }, choice.span.start);
+                }
+                self.chunk.emit(
+                    Instruction::ChoiceSet {
+                        count: choices.len(),
+                    },
+                    choices[0].span.start,
+                );
             }
         }
     }

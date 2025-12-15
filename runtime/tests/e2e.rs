@@ -37,3 +37,198 @@ fn test_empty_source() {
     assert_eq!(runtime.current_line(), "");
     assert!(!runtime.has_more());
 }
+
+// =============================================================================
+// Choice Tests
+// =============================================================================
+
+#[test]
+fn test_choices_basic() {
+    let source = include_str!("fixtures/choices_basic.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Initial line
+    assert_eq!(runtime.current_line(), "How are you?");
+    assert!(!runtime.is_waiting_for_choice());
+    runtime.advance();
+
+    // Now at choice point
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_choices(), &["Good", "Bad"]);
+
+    // Select first choice
+    runtime.select_choice(0);
+    assert!(!runtime.is_waiting_for_choice());
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_with_content() {
+    let source = include_str!("fixtures/choices_with_content.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Initial line
+    assert_eq!(runtime.current_line(), "How are you?");
+    runtime.advance();
+
+    // At choice point
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(
+        runtime.current_choices(),
+        &["I'm doing great!", "Not so good..."]
+    );
+
+    // Select first choice - should get nested content
+    runtime.select_choice(0);
+    assert!(!runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_line(), "That's wonderful!");
+
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "I'm glad to hear it.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_with_content_second_option() {
+    let source = include_str!("fixtures/choices_with_content.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Initial line
+    assert_eq!(runtime.current_line(), "How are you?");
+    runtime.advance();
+
+    // Select second choice
+    runtime.select_choice(1);
+    assert_eq!(runtime.current_line(), "I'm sorry to hear that.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_empty() {
+    let source = include_str!("fixtures/choices_empty.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Initial line
+    assert_eq!(runtime.current_line(), "What's your name?");
+    runtime.advance();
+
+    // At choice point
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_choices(), &["Alice", "Bob"]);
+
+    // Select either choice - should go directly to gather point
+    runtime.select_choice(0);
+    assert!(!runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_line(), "Nice to meet you!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_gather() {
+    let source = include_str!("fixtures/choices_gather.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Initial line
+    assert_eq!(runtime.current_line(), "Pick a door:");
+    runtime.advance();
+
+    // At choice point
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_choices(), &["Door A", "Door B"]);
+
+    // Select first choice
+    runtime.select_choice(0);
+    assert_eq!(runtime.current_line(), "You chose door A.");
+    runtime.advance();
+
+    // Should converge to gather point
+    assert_eq!(runtime.current_line(), "The adventure continues...");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "Goodbye!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_gather_second_option() {
+    let source = include_str!("fixtures/choices_gather.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Skip to choice
+    runtime.advance();
+
+    // Select second choice
+    runtime.select_choice(1);
+    assert_eq!(runtime.current_line(), "You chose door B.");
+    runtime.advance();
+
+    // Should also converge to gather point
+    assert_eq!(runtime.current_line(), "The adventure continues...");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "Goodbye!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_sequential() {
+    let source = include_str!("fixtures/choices_sequential.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // First question
+    assert_eq!(runtime.current_line(), "First question?");
+    runtime.advance();
+
+    // First choice set
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_choices(), &["Yes", "No"]);
+    runtime.select_choice(0);
+
+    // Second question
+    assert_eq!(runtime.current_line(), "Second question?");
+    runtime.advance();
+
+    // Second choice set
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_choices(), &["Red", "Blue"]);
+    runtime.select_choice(1);
+
+    // Done
+    assert_eq!(runtime.current_line(), "Done!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_mixed() {
+    let source = include_str!("fixtures/choices_mixed.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Initial line
+    assert_eq!(runtime.current_line(), "What do you want to do?");
+    runtime.advance();
+
+    // At choice point
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(runtime.current_choices(), &["Talk", "Leave"]);
+
+    // Select first choice (has content)
+    runtime.select_choice(0);
+    assert_eq!(runtime.current_line(), "Let's chat!");
+    runtime.advance();
+
+    // Should converge to gather
+    assert_eq!(runtime.current_line(), "Goodbye!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_mixed_empty_option() {
+    let source = include_str!("fixtures/choices_mixed.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Skip to choice
+    runtime.advance();
+
+    // Select second choice (no content - should go directly to gather)
+    runtime.select_choice(1);
+    assert_eq!(runtime.current_line(), "Goodbye!");
+    assert!(!runtime.has_more());
+}

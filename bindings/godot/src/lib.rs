@@ -1,15 +1,12 @@
-use godot::prelude::*;
+use bobbin_runtime::Runtime;
 use godot::classes::{
-    Engine, Script, ScriptLanguage, ScriptLanguageExtension, IScriptLanguageExtension,
-    ScriptExtension, IScriptExtension,
-    ResourceFormatLoader, IResourceFormatLoader, ResourceLoader,
-    ResourceFormatSaver, IResourceFormatSaver, ResourceSaver,
-    FileAccess, file_access::ModeFlags,
-    script_language::ScriptNameCasing,
-    Resource,
+    Engine, FileAccess, IResourceFormatLoader, IResourceFormatSaver, IScriptExtension,
+    IScriptLanguageExtension, Resource, ResourceFormatLoader, ResourceFormatSaver, ResourceLoader,
+    ResourceSaver, Script, ScriptExtension, ScriptLanguage, ScriptLanguageExtension,
+    file_access::ModeFlags, script_language::ScriptNameCasing,
 };
 use godot::meta::RawPtr;
-use bobbin_runtime::Runtime;
+use godot::prelude::*;
 
 struct BobbinExtension;
 
@@ -60,9 +57,15 @@ pub struct BobbinLanguage {
 #[godot_api]
 impl IScriptLanguageExtension for BobbinLanguage {
     // --- Identity ---
-    fn get_name(&self) -> GString { "Bobbin".into() }
-    fn get_type(&self) -> GString { "BobbinScript".into() }
-    fn get_extension(&self) -> GString { "bobbin".into() }
+    fn get_name(&self) -> GString {
+        "Bobbin".into()
+    }
+    fn get_type(&self) -> GString {
+        "BobbinScript".into()
+    }
+    fn get_extension(&self) -> GString {
+        "bobbin".into()
+    }
     fn get_recognized_extensions(&self) -> PackedStringArray {
         let mut arr = PackedStringArray::new();
         arr.push(&GString::from("bobbin"));
@@ -81,10 +84,18 @@ impl IScriptLanguageExtension for BobbinLanguage {
 
     // --- Script creation ---
     fn create_script(&self) -> Option<Gd<Object>> {
-        let script = Gd::from_init_fn(|base| BobbinScript { base, source_code: GString::new() });
+        let script = Gd::from_init_fn(|base| BobbinScript {
+            base,
+            source_code: GString::new(),
+        });
         Some(script.upcast())
     }
-    fn make_template(&self, _template: GString, _class_name: GString, _base_class_name: GString) -> Option<Gd<Script>> {
+    fn make_template(
+        &self,
+        _template: GString,
+        _class_name: GString,
+        _base_class_name: GString,
+    ) -> Option<Gd<Script>> {
         // Return a new empty BobbinScript when creating a new file
         let script = Gd::from_init_fn(|base| BobbinScript {
             base,
@@ -92,12 +103,20 @@ impl IScriptLanguageExtension for BobbinLanguage {
         });
         Some(script.upcast())
     }
-    fn get_built_in_templates(&self, _object: StringName) -> Array<Dictionary> { Array::new() }
-    fn is_using_templates(&mut self) -> bool { false }
+    fn get_built_in_templates(&self, _object: StringName) -> Array<Dictionary> {
+        Array::new()
+    }
+    fn is_using_templates(&mut self) -> bool {
+        false
+    }
 
     // --- Language features ---
-    fn get_reserved_words(&self) -> PackedStringArray { PackedStringArray::new() }
-    fn is_control_flow_keyword(&self, _keyword: GString) -> bool { false }
+    fn get_reserved_words(&self) -> PackedStringArray {
+        PackedStringArray::new()
+    }
+    fn is_control_flow_keyword(&self, _keyword: GString) -> bool {
+        false
+    }
     fn get_comment_delimiters(&self) -> PackedStringArray {
         let mut arr = PackedStringArray::new();
         arr.push(&GString::from("//"));
@@ -108,44 +127,95 @@ impl IScriptLanguageExtension for BobbinLanguage {
         arr.push(&GString::from("\" \""));
         arr
     }
-    fn supports_builtin_mode(&self) -> bool { false }
-    fn supports_documentation(&self) -> bool { false }
-    fn can_inherit_from_file(&self) -> bool { false }
-    fn has_named_classes(&self) -> bool { false }
-    fn can_make_function(&self) -> bool { false }
+    fn supports_builtin_mode(&self) -> bool {
+        false
+    }
+    fn supports_documentation(&self) -> bool {
+        false
+    }
+    fn can_inherit_from_file(&self) -> bool {
+        false
+    }
+    fn has_named_classes(&self) -> bool {
+        false
+    }
+    fn can_make_function(&self) -> bool {
+        false
+    }
 
     // --- Code editing ---
-    fn validate(&self, _script: GString, _path: GString, _validate_functions: bool, _validate_errors: bool, _validate_warnings: bool, _validate_safe_lines: bool) -> Dictionary {
+    fn validate(
+        &self,
+        _script: GString,
+        _path: GString,
+        _validate_functions: bool,
+        _validate_errors: bool,
+        _validate_warnings: bool,
+        _validate_safe_lines: bool,
+    ) -> Dictionary {
         let mut dict = Dictionary::new();
         dict.set("valid", true);
         dict
     }
-    fn validate_path(&self, _path: GString) -> GString { GString::new() }
-    fn find_function(&self, _function: GString, _code: GString) -> i32 { -1 }
-    fn make_function(&self, _class_name: GString, _function_name: GString, _function_args: PackedStringArray) -> GString { GString::new() }
-    fn complete_code(&self, _code: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary {
+    fn validate_path(&self, _path: GString) -> GString {
+        GString::new()
+    }
+    fn find_function(&self, _function: GString, _code: GString) -> i32 {
+        -1
+    }
+    fn make_function(
+        &self,
+        _class_name: GString,
+        _function_name: GString,
+        _function_args: PackedStringArray,
+    ) -> GString {
+        GString::new()
+    }
+    fn complete_code(
+        &self,
+        _code: GString,
+        _path: GString,
+        _owner: Option<Gd<Object>>,
+    ) -> Dictionary {
         let mut dict = Dictionary::new();
         dict.set("result", 0i32); // CodeCompletionKind::NONE
         dict.set("call_hint", GString::new());
         dict.set("force", false);
         dict
     }
-    fn lookup_code(&self, _code: GString, _symbol: GString, _path: GString, _owner: Option<Gd<Object>>) -> Dictionary {
+    fn lookup_code(
+        &self,
+        _code: GString,
+        _symbol: GString,
+        _path: GString,
+        _owner: Option<Gd<Object>>,
+    ) -> Dictionary {
         // Godot 4.3 requires all six keys to be present
         let mut dict = Dictionary::new();
         dict.set("result", 7i32); // Error::ERR_UNAVAILABLE = 7 (no result found)
-        dict.set("type", 0i32);   // LOOKUP_RESULT_SCRIPT_LOCATION
+        dict.set("type", 0i32); // LOOKUP_RESULT_SCRIPT_LOCATION
         dict.set("script", Variant::nil());
         dict.set("class_name", GString::new());
         dict.set("class_path", GString::new());
         dict.set("location", -1i32);
         dict
     }
-    fn auto_indent_code(&self, code: GString, _from_line: i32, _to_line: i32) -> GString { code }
+    fn auto_indent_code(&self, code: GString, _from_line: i32, _to_line: i32) -> GString {
+        code
+    }
 
     // --- External editor ---
-    fn open_in_external_editor(&mut self, _script: Option<Gd<Script>>, _line: i32, _column: i32) -> godot::global::Error { godot::global::Error::ERR_UNAVAILABLE }
-    fn overrides_external_editor(&mut self) -> bool { false }
+    fn open_in_external_editor(
+        &mut self,
+        _script: Option<Gd<Script>>,
+        _line: i32,
+        _column: i32,
+    ) -> godot::global::Error {
+        godot::global::Error::ERR_UNAVAILABLE
+    }
+    fn overrides_external_editor(&mut self) -> bool {
+        false
+    }
 
     // --- Global constants ---
     fn add_global_constant(&mut self, _name: StringName, _value: Variant) {}
@@ -153,17 +223,58 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn remove_named_global_constant(&mut self, _name: StringName) {}
 
     // --- Debugging ---
-    fn debug_get_error(&self) -> GString { GString::new() }
-    fn debug_get_stack_level_count(&self) -> i32 { 0 }
-    fn debug_get_stack_level_line(&self, _level: i32) -> i32 { 0 }
-    fn debug_get_stack_level_function(&self, _level: i32) -> GString { GString::new() }
-    fn debug_get_stack_level_source(&self, _level: i32) -> GString { GString::new() }
-    fn debug_get_stack_level_locals(&mut self, _level: i32, _max_subitems: i32, _max_depth: i32) -> Dictionary { Dictionary::new() }
-    fn debug_get_stack_level_members(&mut self, _level: i32, _max_subitems: i32, _max_depth: i32) -> Dictionary { Dictionary::new() }
-    unsafe fn debug_get_stack_level_instance_rawptr(&mut self, _level: i32) -> RawPtr<*mut std::ffi::c_void> { unsafe { RawPtr::new(std::ptr::null_mut()) } }
-    fn debug_get_globals(&mut self, _max_subitems: i32, _max_depth: i32) -> Dictionary { Dictionary::new() }
-    fn debug_parse_stack_level_expression(&mut self, _level: i32, _expression: GString, _max_subitems: i32, _max_depth: i32) -> GString { GString::new() }
-    fn debug_get_current_stack_info(&mut self) -> Array<Dictionary> { Array::new() }
+    fn debug_get_error(&self) -> GString {
+        GString::new()
+    }
+    fn debug_get_stack_level_count(&self) -> i32 {
+        0
+    }
+    fn debug_get_stack_level_line(&self, _level: i32) -> i32 {
+        0
+    }
+    fn debug_get_stack_level_function(&self, _level: i32) -> GString {
+        GString::new()
+    }
+    fn debug_get_stack_level_source(&self, _level: i32) -> GString {
+        GString::new()
+    }
+    fn debug_get_stack_level_locals(
+        &mut self,
+        _level: i32,
+        _max_subitems: i32,
+        _max_depth: i32,
+    ) -> Dictionary {
+        Dictionary::new()
+    }
+    fn debug_get_stack_level_members(
+        &mut self,
+        _level: i32,
+        _max_subitems: i32,
+        _max_depth: i32,
+    ) -> Dictionary {
+        Dictionary::new()
+    }
+    unsafe fn debug_get_stack_level_instance_rawptr(
+        &mut self,
+        _level: i32,
+    ) -> RawPtr<*mut std::ffi::c_void> {
+        unsafe { RawPtr::new(std::ptr::null_mut()) }
+    }
+    fn debug_get_globals(&mut self, _max_subitems: i32, _max_depth: i32) -> Dictionary {
+        Dictionary::new()
+    }
+    fn debug_parse_stack_level_expression(
+        &mut self,
+        _level: i32,
+        _expression: GString,
+        _max_subitems: i32,
+        _max_depth: i32,
+    ) -> GString {
+        GString::new()
+    }
+    fn debug_get_current_stack_info(&mut self) -> Array<Dictionary> {
+        Array::new()
+    }
 
     // --- Reloading ---
     fn reload_all_scripts(&mut self) {
@@ -178,20 +289,42 @@ impl IScriptLanguageExtension for BobbinLanguage {
     }
 
     // --- Public API info ---
-    fn get_public_functions(&self) -> Array<Dictionary> { Array::new() }
-    fn get_public_constants(&self) -> Dictionary { Dictionary::new() }
-    fn get_public_annotations(&self) -> Array<Dictionary> { Array::new() }
+    fn get_public_functions(&self) -> Array<Dictionary> {
+        Array::new()
+    }
+    fn get_public_constants(&self) -> Dictionary {
+        Dictionary::new()
+    }
+    fn get_public_annotations(&self) -> Array<Dictionary> {
+        Array::new()
+    }
 
     // --- Profiling ---
     fn profiling_start(&mut self) {}
     fn profiling_stop(&mut self) {}
     fn profiling_set_save_native_calls(&mut self, _enable: bool) {}
-    unsafe fn profiling_get_accumulated_data_rawptr(&mut self, _info_array: RawPtr<*mut godot::classes::native::ScriptLanguageExtensionProfilingInfo>, _info_max: i32) -> i32 { 0 }
-    unsafe fn profiling_get_frame_data_rawptr(&mut self, _info_array: RawPtr<*mut godot::classes::native::ScriptLanguageExtensionProfilingInfo>, _info_max: i32) -> i32 { 0 }
+    unsafe fn profiling_get_accumulated_data_rawptr(
+        &mut self,
+        _info_array: RawPtr<*mut godot::classes::native::ScriptLanguageExtensionProfilingInfo>,
+        _info_max: i32,
+    ) -> i32 {
+        0
+    }
+    unsafe fn profiling_get_frame_data_rawptr(
+        &mut self,
+        _info_array: RawPtr<*mut godot::classes::native::ScriptLanguageExtensionProfilingInfo>,
+        _info_max: i32,
+    ) -> i32 {
+        0
+    }
 
     // --- Global class handling ---
-    fn handles_global_class_type(&self, type_: GString) -> bool { type_ == GString::from("BobbinScript") }
-    fn get_global_class_name(&self, _path: GString) -> Dictionary { Dictionary::new() }
+    fn handles_global_class_type(&self, type_: GString) -> bool {
+        type_ == GString::from("BobbinScript")
+    }
+    fn get_global_class_name(&self, _path: GString) -> Dictionary {
+        Dictionary::new()
+    }
 }
 
 // =============================================================================
@@ -222,23 +355,43 @@ impl IScriptExtension for BobbinScript {
     }
 
     // --- Editor ---
-    fn editor_can_reload_from_file(&mut self) -> bool { true }
+    fn editor_can_reload_from_file(&mut self) -> bool {
+        true
+    }
 
     // --- Script info ---
-    fn can_instantiate(&self) -> bool { false }
-    fn get_base_script(&self) -> Option<Gd<Script>> { None }
-    fn get_global_name(&self) -> StringName { StringName::default() }
-    fn inherits_script(&self, _script: Gd<Script>) -> bool { false }
-    fn get_instance_base_type(&self) -> StringName { StringName::from("RefCounted") }
+    fn can_instantiate(&self) -> bool {
+        false
+    }
+    fn get_base_script(&self) -> Option<Gd<Script>> {
+        None
+    }
+    fn get_global_name(&self) -> StringName {
+        StringName::default()
+    }
+    fn inherits_script(&self, _script: Gd<Script>) -> bool {
+        false
+    }
+    fn get_instance_base_type(&self) -> StringName {
+        StringName::from("RefCounted")
+    }
 
     // --- Instances ---
-    unsafe fn instance_create_rawptr(&self, _for_object: Gd<Object>) -> RawPtr<*mut std::ffi::c_void> {
+    unsafe fn instance_create_rawptr(
+        &self,
+        _for_object: Gd<Object>,
+    ) -> RawPtr<*mut std::ffi::c_void> {
         unsafe { RawPtr::new(std::ptr::null_mut()) }
     }
-    unsafe fn placeholder_instance_create_rawptr(&self, _for_object: Gd<Object>) -> RawPtr<*mut std::ffi::c_void> {
+    unsafe fn placeholder_instance_create_rawptr(
+        &self,
+        _for_object: Gd<Object>,
+    ) -> RawPtr<*mut std::ffi::c_void> {
         unsafe { RawPtr::new(std::ptr::null_mut()) }
     }
-    fn instance_has(&self, _object: Gd<Object>) -> bool { false }
+    fn instance_has(&self, _object: Gd<Object>) -> bool {
+        false
+    }
 
     // --- Reloading ---
     fn reload(&mut self, _keep_state: bool) -> godot::global::Error {
@@ -263,30 +416,62 @@ impl IScriptExtension for BobbinScript {
     fn update_exports(&mut self) {}
 
     // --- Documentation ---
-    fn get_documentation(&self) -> Array<Dictionary> { Array::new() }
+    fn get_documentation(&self) -> Array<Dictionary> {
+        Array::new()
+    }
 
     // --- Methods ---
-    fn has_method(&self, _method: StringName) -> bool { false }
-    fn has_static_method(&self, _method: StringName) -> bool { false }
-    fn get_method_info(&self, _method: StringName) -> Dictionary { Dictionary::new() }
-    fn get_script_method_list(&self) -> Array<Dictionary> { Array::new() }
+    fn has_method(&self, _method: StringName) -> bool {
+        false
+    }
+    fn has_static_method(&self, _method: StringName) -> bool {
+        false
+    }
+    fn get_method_info(&self, _method: StringName) -> Dictionary {
+        Dictionary::new()
+    }
+    fn get_script_method_list(&self) -> Array<Dictionary> {
+        Array::new()
+    }
 
     // --- Properties ---
-    fn has_property_default_value(&self, _property: StringName) -> bool { false }
-    fn get_property_default_value(&self, _property: StringName) -> Variant { Variant::nil() }
-    fn get_script_property_list(&self) -> Array<Dictionary> { Array::new() }
-    fn get_member_line(&self, _member: StringName) -> i32 { -1 }
-    fn get_constants(&self) -> Dictionary { Dictionary::new() }
-    fn get_members(&self) -> Array<StringName> { Array::new() }
+    fn has_property_default_value(&self, _property: StringName) -> bool {
+        false
+    }
+    fn get_property_default_value(&self, _property: StringName) -> Variant {
+        Variant::nil()
+    }
+    fn get_script_property_list(&self) -> Array<Dictionary> {
+        Array::new()
+    }
+    fn get_member_line(&self, _member: StringName) -> i32 {
+        -1
+    }
+    fn get_constants(&self) -> Dictionary {
+        Dictionary::new()
+    }
+    fn get_members(&self) -> Array<StringName> {
+        Array::new()
+    }
 
     // --- Signals ---
-    fn has_script_signal(&self, _signal: StringName) -> bool { false }
-    fn get_script_signal_list(&self) -> Array<Dictionary> { Array::new() }
+    fn has_script_signal(&self, _signal: StringName) -> bool {
+        false
+    }
+    fn get_script_signal_list(&self) -> Array<Dictionary> {
+        Array::new()
+    }
 
     // --- Flags ---
-    fn is_tool(&self) -> bool { false }
-    fn is_valid(&self) -> bool { true }
-    fn is_placeholder_fallback_enabled(&self) -> bool { false }
+    fn is_tool(&self) -> bool {
+        false
+    }
+    fn is_valid(&self) -> bool {
+        true
+    }
+    fn is_placeholder_fallback_enabled(&self) -> bool {
+        false
+    }
 
     // --- Language ---
     fn get_language(&self) -> Option<Gd<ScriptLanguage>> {
@@ -294,7 +479,9 @@ impl IScriptExtension for BobbinScript {
     }
 
     // --- RPC ---
-    fn get_rpc_config(&self) -> Variant { Variant::nil() }
+    fn get_rpc_config(&self) -> Variant {
+        Variant::nil()
+    }
 }
 
 // =============================================================================
@@ -461,7 +648,10 @@ impl BobbinRuntime {
     #[func]
     fn from_string(content: GString) -> Option<Gd<Self>> {
         match Runtime::new(&content.to_string()) {
-            Ok(runtime) => Some(Gd::from_init_fn(|base| Self { base, inner: runtime })),
+            Ok(runtime) => Some(Gd::from_init_fn(|base| Self {
+                base,
+                inner: runtime,
+            })),
             Err(e) => {
                 godot_error!("Failed to load bobbin script: {:?}", e);
                 None

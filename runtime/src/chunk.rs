@@ -1,7 +1,8 @@
 #[derive(Debug, Clone, Copy)]
 pub enum Instruction {
-    Constant(usize),
+    Constant { index: usize },
     Line,
+    ChoiceSet { count: usize },
     Return,
 }
 

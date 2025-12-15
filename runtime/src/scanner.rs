@@ -7,9 +7,12 @@ pub struct Token<'a> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenKind {
-    String,
-    Eof,
+    Line,
+    Choice,
+    //Indent,
+    //Dedent,
     NewLine,
+    Eof,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,9 +80,7 @@ impl<'a> Scanner<'a> {
         if self.is_at_end() {
             Ok(self.make_token(TokenKind::Eof))
         } else {
-            let character = self.advance();
-
-            match character {
+            match self.advance() {
                 Some('\n') => {
                     self.line += 1;
                     Ok(self.make_token(TokenKind::NewLine))
@@ -91,11 +92,23 @@ impl<'a> Scanner<'a> {
                     self.line += 1;
                     Ok(self.make_token(TokenKind::NewLine))
                 }
+                Some('-') => {
+                    if self.peek() == Some(' ') {
+                        self.advance();
+                        self.start = self.current;
+                        while !self.is_at_end() && !self.is_at_newline() {
+                            self.advance();
+                        }
+                        Ok(self.make_token(TokenKind::Choice))
+                    } else {
+                        Err(self.error("Choice marker '-' must be followed by a space"))
+                    }
+                }
                 _ => {
                     while !self.is_at_end() && !self.is_at_newline() {
                         self.advance();
                     }
-                    Ok(self.make_token(TokenKind::String))
+                    Ok(self.make_token(TokenKind::Line))
                 }
             }
         }
