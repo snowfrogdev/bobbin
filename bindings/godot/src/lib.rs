@@ -673,4 +673,24 @@ impl BobbinRuntime {
     fn has_more(&self) -> bool {
         self.inner.has_more()
     }
+
+    #[func]
+    fn is_waiting_for_choice(&self) -> bool {
+        self.inner.is_waiting_for_choice()
+    }
+
+    #[func]
+    fn current_choices(&self) -> PackedStringArray {
+        let choices = self.inner.current_choices();
+        let mut arr = PackedStringArray::new();
+        for choice in choices {
+            arr.push(&GString::from(choice.as_str()));
+        }
+        arr
+    }
+
+    #[func]
+    fn select_choice(&mut self, index: i32) {
+        self.inner.select_choice(index as usize);
+    }
 }
