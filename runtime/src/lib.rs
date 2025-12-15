@@ -74,6 +74,7 @@ pub struct Runtime {
     vm: VM,
     source: String,
     current_line: Option<String>,
+    current_choices: Option<Vec<String>>,
     is_done: bool,
 }
 
@@ -88,6 +89,7 @@ impl Runtime {
             vm: VM::new(chunk),
             source: script.to_string(),
             current_line: None,
+            current_choices: None,
             is_done: false,
         };
         runtime.step_vm();
@@ -96,6 +98,9 @@ impl Runtime {
 
     pub fn current_line(&self) -> &str {
         self.current_line.as_deref().unwrap_or("")
+    }
+    pub fn current_choices(&self) -> &[String] {
+        self.current_choices.as_deref().unwrap_or(&[])
     }
 
     pub fn advance(&mut self) {
@@ -108,12 +113,27 @@ impl Runtime {
         !self.is_done
     }
 
+    pub fn is_waiting_for_choice(&self) -> bool {
+        self.current_choices.is_some()
+    }
+
+    pub fn select_choice(&mut self, index: usize) {
+        if self.current_choices.is_some() {
+            self.current_choices = None;
+            self.step_vm();
+        }
+    }
+
     fn step_vm(&mut self) {
         match self.vm.step() {
             StepResult::Line(text) => {
                 self.current_line = Some(text);
                 // Check if this was the last line (no more content after this)
                 self.is_done = self.vm.is_at_end();
+            }
+            StepResult::Choice(choices) => {
+                self.current_line = None;
+                self.current_choices = Some(choices);
             }
             StepResult::Done => {
                 self.current_line = None;

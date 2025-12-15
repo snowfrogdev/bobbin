@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::ast::{Script, Stmt};
+use crate::ast::{Choice, Script, Stmt};
 use crate::scanner::{LexicalError, Span, Token, TokenKind, offset_to_position};
 
 #[derive(Debug)]
@@ -57,8 +57,11 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                     self.synchronize();
                 }
                 Some(Ok(token)) => match token.kind {
-                    TokenKind::String => {
+                    TokenKind::Line => {
                         statements.push(self.line_statement());
+                    }
+                    TokenKind::Choice => {
+                        statements.push(self.choice_set());
                     }
                     TokenKind::NewLine => {
                         self.tokens.next();
@@ -83,6 +86,37 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             text: token.lexeme.to_string(),
             span: token.span,
         }
+    }
+
+    fn choice_set(&mut self) -> Stmt {
+        let mut choices = Vec::new();
+
+        loop {
+            let Some(Ok(token)) = self.tokens.next() else {
+                unreachable!("choice_set called without verified Choice token")
+            };
+
+            if !matches!(self.tokens.peek(), Some(Ok(t)) if t.kind == TokenKind::NewLine) {
+                self.errors.push(ParseError::Syntax {
+                    message: "Expected newline after choice".to_string(),
+                    span: token.span,
+                });
+                self.synchronize();
+                break;
+            }
+
+            self.tokens.next(); // Consume the NewLine
+
+            choices.push(Choice {
+                text: token.lexeme.to_string(),
+                span: token.span,
+            });
+
+            if !matches!(self.tokens.peek(), Some(Ok(t)) if t.kind == TokenKind::Choice) {
+                break;
+            }
+        }
+        Stmt::ChoiceSet { choices }
     }
 
     fn synchronize(&mut self) {

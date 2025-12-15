@@ -2,6 +2,7 @@ use crate::chunk::{Chunk, Instruction, Value};
 
 pub(crate) enum StepResult {
     Line(String),
+    Choice(Vec<String>),
     Done,
 }
 
@@ -23,7 +24,10 @@ impl VM {
 
     /// Returns true if the next instruction is Return (no more content).
     pub(crate) fn is_at_end(&self) -> bool {
-        matches!(self.chunk.code.get(self.ip), Some(Instruction::Return) | None)
+        matches!(
+            self.chunk.code.get(self.ip),
+            Some(Instruction::Return) | None
+        )
     }
 
     pub(crate) fn step(&mut self) -> StepResult {
@@ -32,7 +36,7 @@ impl VM {
             self.ip += 1;
 
             match instruction {
-                Instruction::Constant(index) => {
+                Instruction::Constant { index } => {
                     let value = self.chunk.constants[index].clone();
                     self.stack.push(value);
                 }
@@ -40,6 +44,16 @@ impl VM {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
                     let Value::String(text) = value;
                     return StepResult::Line(text);
+                }
+                Instruction::ChoiceSet { count } => {
+                    let mut choices = Vec::with_capacity(count);
+                    for _ in 0..count {
+                        let value = self.stack.pop().expect("stack underflow: compiler bug");
+                        let Value::String(text) = value;
+                        choices.push(text);
+                    }
+                    choices.reverse();
+                    return StepResult::Choice(choices);
                 }
                 Instruction::Return => {
                     debug_assert!(
