@@ -232,3 +232,65 @@ fn test_choices_mixed_empty_option() {
     assert_eq!(runtime.current_line(), "Goodbye!");
     assert!(!runtime.has_more());
 }
+
+#[test]
+fn test_intro_dialog() {
+    let source = include_str!("fixtures/intro.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // First few lines of narration
+    assert_eq!(runtime.current_line(), "Long ago, in a kingdom by the sea...");
+    assert!(!runtime.is_waiting_for_choice());
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "There lived a young wanderer with no name.");
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "One day, she came upon a crossroads.");
+    runtime.advance();
+
+    // First choice set
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(
+        runtime.current_choices(),
+        &["Take the mountain path", "Follow the river", "Rest here for the night"]
+    );
+
+    // Select first choice
+    runtime.select_choice(0);
+    assert!(!runtime.is_waiting_for_choice());
+
+    // Continue narration
+    assert_eq!(runtime.current_line(), "The wanderer made her choice and continued on.");
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "As the sun began to set, she encountered a mysterious stranger.");
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "\"Greetings, traveler,\" the stranger said. \"What brings you to these lands?\"");
+    runtime.advance();
+
+    // Second choice set
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(
+        runtime.current_choices(),
+        &["\"I seek adventure and fortune.\"", "\"I am looking for someone.\"", "\"I'm just passing through.\""]
+    );
+
+    // Select second choice
+    runtime.select_choice(1);
+    assert!(!runtime.is_waiting_for_choice());
+
+    // Final lines
+    assert_eq!(runtime.current_line(), "The stranger nodded thoughtfully.");
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "\"Very well. May your journey be fruitful.\"");
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "And so the wanderer continued, her destiny yet unwritten.");
+    runtime.advance();
+
+    assert_eq!(runtime.current_line(), "The end.");
+    assert!(!runtime.has_more());
+}
