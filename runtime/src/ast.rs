@@ -15,4 +15,6 @@ pub enum Stmt {
 pub struct Choice {
     pub text: String,
     pub span: Span,
+    /// Nested statements to execute when this choice is selected
+    pub nested: Vec<Stmt>,
 }

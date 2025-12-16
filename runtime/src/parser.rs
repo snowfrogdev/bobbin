@@ -63,7 +63,8 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                     TokenKind::Choice => {
                         statements.push(self.choice_set());
                     }
-                    TokenKind::NewLine => {
+                    TokenKind::NewLine | TokenKind::Indent | TokenKind::Dedent => {
+                        // Skip newlines and indent/dedent tokens at top level
                         self.tokens.next();
                     }
                     TokenKind::Eof => break,
@@ -107,9 +108,13 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
 
             self.tokens.next(); // Consume the NewLine
 
+            // Parse any nested content under this choice
+            let nested = self.parse_nested_content();
+
             choices.push(Choice {
                 text: token.lexeme.to_string(),
                 span: token.span,
+                nested,
             });
 
             if !matches!(self.tokens.peek(), Some(Ok(t)) if t.kind == TokenKind::Choice) {
@@ -117,6 +122,49 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             }
         }
         Stmt::ChoiceSet { choices }
+    }
+
+    /// Parse nested content under a choice (after Indent, before Dedent).
+    /// Returns empty Vec if no nested content.
+    fn parse_nested_content(&mut self) -> Vec<Stmt> {
+        // Check if there's an Indent token
+        if !matches!(self.tokens.peek(), Some(Ok(t)) if t.kind == TokenKind::Indent) {
+            return Vec::new();
+        }
+
+        self.tokens.next(); // Consume the Indent
+
+        let mut statements = Vec::new();
+
+        loop {
+            match self.tokens.peek() {
+                None => break,
+                Some(Err(_)) => {
+                    if let Some(Err(e)) = self.tokens.next() {
+                        self.errors.push(e.into());
+                    }
+                    self.synchronize();
+                }
+                Some(Ok(token)) => match token.kind {
+                    TokenKind::Dedent => {
+                        self.tokens.next(); // Consume Dedent
+                        break;
+                    }
+                    TokenKind::Line => {
+                        statements.push(self.line_statement());
+                    }
+                    TokenKind::Choice => {
+                        statements.push(self.choice_set());
+                    }
+                    TokenKind::NewLine | TokenKind::Indent => {
+                        self.tokens.next();
+                    }
+                    TokenKind::Eof => break,
+                },
+            }
+        }
+
+        statements
     }
 
     fn synchronize(&mut self) {
