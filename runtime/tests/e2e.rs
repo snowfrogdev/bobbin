@@ -57,7 +57,7 @@ fn test_choices_basic() {
     assert_eq!(runtime.current_choices(), &["Good", "Bad"]);
 
     // Select first choice
-    runtime.select_choice(0);
+    runtime.select_choice(0).unwrap();
     assert!(!runtime.is_waiting_for_choice());
     assert!(!runtime.has_more());
 }
@@ -79,7 +79,7 @@ fn test_choices_with_content() {
     );
 
     // Select first choice - should get nested content
-    runtime.select_choice(0);
+    runtime.select_choice(0).unwrap();
     assert!(!runtime.is_waiting_for_choice());
     assert_eq!(runtime.current_line(), "That's wonderful!");
 
@@ -98,7 +98,7 @@ fn test_choices_with_content_second_option() {
     runtime.advance();
 
     // Select second choice
-    runtime.select_choice(1);
+    runtime.select_choice(1).unwrap();
     assert_eq!(runtime.current_line(), "I'm sorry to hear that.");
     assert!(!runtime.has_more());
 }
@@ -117,7 +117,7 @@ fn test_choices_empty() {
     assert_eq!(runtime.current_choices(), &["Alice", "Bob"]);
 
     // Select either choice - should go directly to gather point
-    runtime.select_choice(0);
+    runtime.select_choice(0).unwrap();
     assert!(!runtime.is_waiting_for_choice());
     assert_eq!(runtime.current_line(), "Nice to meet you!");
     assert!(!runtime.has_more());
@@ -137,7 +137,7 @@ fn test_choices_gather() {
     assert_eq!(runtime.current_choices(), &["Door A", "Door B"]);
 
     // Select first choice
-    runtime.select_choice(0);
+    runtime.select_choice(0).unwrap();
     assert_eq!(runtime.current_line(), "You chose door A.");
     runtime.advance();
 
@@ -157,7 +157,7 @@ fn test_choices_gather_second_option() {
     runtime.advance();
 
     // Select second choice
-    runtime.select_choice(1);
+    runtime.select_choice(1).unwrap();
     assert_eq!(runtime.current_line(), "You chose door B.");
     runtime.advance();
 
@@ -180,7 +180,7 @@ fn test_choices_sequential() {
     // First choice set
     assert!(runtime.is_waiting_for_choice());
     assert_eq!(runtime.current_choices(), &["Yes", "No"]);
-    runtime.select_choice(0);
+    runtime.select_choice(0).unwrap();
 
     // Second question
     assert_eq!(runtime.current_line(), "Second question?");
@@ -189,7 +189,7 @@ fn test_choices_sequential() {
     // Second choice set
     assert!(runtime.is_waiting_for_choice());
     assert_eq!(runtime.current_choices(), &["Red", "Blue"]);
-    runtime.select_choice(1);
+    runtime.select_choice(1).unwrap();
 
     // Done
     assert_eq!(runtime.current_line(), "Done!");
@@ -210,7 +210,7 @@ fn test_choices_mixed() {
     assert_eq!(runtime.current_choices(), &["Talk", "Leave"]);
 
     // Select first choice (has content)
-    runtime.select_choice(0);
+    runtime.select_choice(0).unwrap();
     assert_eq!(runtime.current_line(), "Let's chat!");
     runtime.advance();
 
@@ -228,69 +228,93 @@ fn test_choices_mixed_empty_option() {
     runtime.advance();
 
     // Select second choice (no content - should go directly to gather)
-    runtime.select_choice(1);
+    runtime.select_choice(1).unwrap();
     assert_eq!(runtime.current_line(), "Goodbye!");
     assert!(!runtime.has_more());
 }
 
 #[test]
-fn test_intro_dialog() {
-    let source = include_str!("fixtures/intro.bobbin");
+fn test_choices_nested_talk_to_alice() {
+    let source = include_str!("fixtures/choices_nested.bobbin");
     let mut runtime = Runtime::new(source).unwrap();
 
-    // First few lines of narration
-    assert_eq!(runtime.current_line(), "Long ago, in a kingdom by the sea...");
-    assert!(!runtime.is_waiting_for_choice());
+    // Initial line
+    assert_eq!(runtime.current_line(), "What do you want to do?");
     runtime.advance();
 
-    assert_eq!(runtime.current_line(), "There lived a young wanderer with no name.");
-    runtime.advance();
-
-    assert_eq!(runtime.current_line(), "One day, she came upon a crossroads.");
-    runtime.advance();
-
-    // First choice set
+    // First choice: Talk or Leave
     assert!(runtime.is_waiting_for_choice());
-    assert_eq!(
-        runtime.current_choices(),
-        &["Take the mountain path", "Follow the river", "Rest here for the night"]
-    );
+    assert_eq!(runtime.current_choices(), &["Talk to someone", "Leave"]);
+    runtime.select_choice(0).unwrap();
 
-    // Select first choice
-    runtime.select_choice(0);
-    assert!(!runtime.is_waiting_for_choice());
-
-    // Continue narration
-    assert_eq!(runtime.current_line(), "The wanderer made her choice and continued on.");
+    // After selecting "Talk to someone"
+    assert_eq!(runtime.current_line(), "Who would you like to talk to?");
     runtime.advance();
 
-    assert_eq!(runtime.current_line(), "As the sun began to set, she encountered a mysterious stranger.");
-    runtime.advance();
-
-    assert_eq!(runtime.current_line(), "\"Greetings, traveler,\" the stranger said. \"What brings you to these lands?\"");
-    runtime.advance();
-
-    // Second choice set
+    // Nested choice: Alice or Bob
     assert!(runtime.is_waiting_for_choice());
-    assert_eq!(
-        runtime.current_choices(),
-        &["\"I seek adventure and fortune.\"", "\"I am looking for someone.\"", "\"I'm just passing through.\""]
-    );
+    assert_eq!(runtime.current_choices(), &["Alice", "Bob"]);
+    runtime.select_choice(0).unwrap();
 
-    // Select second choice
-    runtime.select_choice(1);
-    assert!(!runtime.is_waiting_for_choice());
-
-    // Final lines
-    assert_eq!(runtime.current_line(), "The stranger nodded thoughtfully.");
+    // After selecting "Alice"
+    assert_eq!(runtime.current_line(), "You chat with Alice.");
     runtime.advance();
 
-    assert_eq!(runtime.current_line(), "\"Very well. May your journey be fruitful.\"");
+    // Inner gather point
+    assert_eq!(runtime.current_line(), "That was a nice conversation.");
     runtime.advance();
 
-    assert_eq!(runtime.current_line(), "And so the wanderer continued, her destiny yet unwritten.");
+    // Outer gather point
+    assert_eq!(runtime.current_line(), "The end.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_nested_talk_to_bob() {
+    let source = include_str!("fixtures/choices_nested.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Skip to first choice
+    runtime.advance();
+    runtime.select_choice(0).unwrap();
+
+    // Skip to nested choice
     runtime.advance();
 
+    // Select Bob
+    assert_eq!(runtime.current_choices(), &["Alice", "Bob"]);
+    runtime.select_choice(1).unwrap();
+
+    // After selecting "Bob"
+    assert_eq!(runtime.current_line(), "You chat with Bob.");
+    runtime.advance();
+
+    // Inner gather point
+    assert_eq!(runtime.current_line(), "That was a nice conversation.");
+    runtime.advance();
+
+    // Outer gather point
+    assert_eq!(runtime.current_line(), "The end.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_choices_nested_leave() {
+    let source = include_str!("fixtures/choices_nested.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Skip to first choice
+    runtime.advance();
+
+    // Select "Leave" - should skip the nested choice entirely
+    assert_eq!(runtime.current_choices(), &["Talk to someone", "Leave"]);
+    runtime.select_choice(1).unwrap();
+
+    // After selecting "Leave"
+    assert_eq!(runtime.current_line(), "Goodbye!");
+    runtime.advance();
+
+    // Outer gather point
     assert_eq!(runtime.current_line(), "The end.");
     assert!(!runtime.has_more());
 }

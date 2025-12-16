@@ -6,6 +6,8 @@ use crate::resolver::{Resolver, SemanticError};
 use crate::scanner::Scanner;
 use crate::vm::{StepResult, VM};
 
+pub use crate::vm::RuntimeError;
+
 mod ast;
 mod chunk;
 mod compiler;
@@ -117,15 +119,22 @@ impl Runtime {
         self.current_choices.is_some()
     }
 
-    pub fn select_choice(&mut self, index: usize) {
+    pub fn select_choice(&mut self, index: usize) -> Result<(), RuntimeError> {
         if self.current_choices.is_some() {
             self.current_choices = None;
-            self.step_vm();
+            let result = self.vm.select_and_continue(index)?;
+            self.handle_step_result(result);
         }
+        Ok(())
     }
 
     fn step_vm(&mut self) {
-        match self.vm.step() {
+        let result = self.vm.step();
+        self.handle_step_result(result);
+    }
+
+    fn handle_step_result(&mut self, result: StepResult) {
+        match result {
             StepResult::Line(text) => {
                 self.current_line = Some(text);
                 // Check if this was the last line (no more content after this)
