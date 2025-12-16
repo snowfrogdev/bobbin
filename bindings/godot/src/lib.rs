@@ -691,6 +691,8 @@ impl BobbinRuntime {
 
     #[func]
     fn select_choice(&mut self, index: i32) {
-        self.inner.select_choice(index as usize);
+        if let Err(e) = self.inner.select_choice(index as usize) {
+            godot_error!("select_choice failed: {}", e);
+        }
     }
 }
