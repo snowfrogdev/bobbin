@@ -194,6 +194,10 @@ impl<'a> Scanner<'a> {
                 continue;
             }
             if self.peek() == Some('\t') {
+                // Advance past the tab and skip to end of line to avoid infinite loop
+                while !self.is_at_end() && !self.is_at_newline() {
+                    self.advance();
+                }
                 return Err(self.error("Tabs not allowed in indentation, use spaces"));
             }
             if self.is_at_end() {

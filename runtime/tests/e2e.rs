@@ -318,3 +318,26 @@ fn test_choices_nested_leave() {
     assert_eq!(runtime.current_line(), "The end.");
     assert!(!runtime.has_more());
 }
+
+// =============================================================================
+// Error Handling Tests
+// =============================================================================
+
+#[test]
+fn test_invalid_tabs_rejected() {
+    let source = include_str!("fixtures/invalid_tabs.bobbin");
+
+    // Should return an error, not hang or panic
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for tabs in indentation"),
+        Err(err) => {
+            // Use format_with_source to get detailed error messages
+            let err_string = err.format_with_source(source);
+            assert!(
+                err_string.contains("tab") || err_string.contains("Tab"),
+                "Error message should mention tabs: {}",
+                err_string
+            );
+        }
+    }
+}
