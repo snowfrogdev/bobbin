@@ -1,16 +1,27 @@
-Long ago, in a kingdom by the sea...
-There lived a young wanderer with no name.
-One day, she came upon a crossroads.
-- Take the mountain path
-- Follow the river
-- Rest here for the night
-The wanderer made her choice and continued on.
-As the sun began to set, she encountered a mysterious stranger.
-"Greetings, traveler," the stranger said. "What brings you to these lands?"
-- "I seek adventure and fortune."
-- "I am looking for someone."
-- "I'm just passing through."
-The stranger nodded thoughtfully.
-"Very well. May your journey be fruitful."
-And so the wanderer continued, her destiny yet unwritten.
-The end.
+Welcome, traveler. What brings you to the Crossroads Inn?
+
+- I seek information
+  The innkeeper leans closer.
+  What kind of information do you seek?
+  - About the ancient ruins
+    Ah, the ruins to the north. Dangerous place.
+    Many have gone, few have returned.
+  - About the missing merchant
+    The merchant? Last seen heading toward the forest.
+    Some say bandits, others whisper of darker things.
+  Is there anything else I can help with?
+
+- I need a room for the night
+  That'll be 5 gold pieces.
+  - Pay the fee
+    Excellent. Room three, up the stairs.
+  - Try to haggle
+    The innkeeper frowns.
+    Fine, 4 gold. But no breakfast.
+  Sleep well, traveler.
+
+- Just passing through
+  Safe travels then.
+
+The night grows darker outside.
+Perhaps tomorrow will bring answers.
