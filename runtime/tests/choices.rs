@@ -87,10 +87,34 @@ fn gather_door_b() {
 // =============================================================================
 
 #[test]
-fn sequential() {
+fn sequential_yes_red() {
+    support::run_trace_test(
+        &support::cases_dir().join("choices/sequential.bobbin"),
+        "yes_red",
+    );
+}
+
+#[test]
+fn sequential_yes_blue() {
     support::run_trace_test(
         &support::cases_dir().join("choices/sequential.bobbin"),
         "yes_blue",
+    );
+}
+
+#[test]
+fn sequential_no_red() {
+    support::run_trace_test(
+        &support::cases_dir().join("choices/sequential.bobbin"),
+        "no_red",
+    );
+}
+
+#[test]
+fn sequential_no_blue() {
+    support::run_trace_test(
+        &support::cases_dir().join("choices/sequential.bobbin"),
+        "no_blue",
     );
 }
 
