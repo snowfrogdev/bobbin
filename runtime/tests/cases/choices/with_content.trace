@@ -14,6 +14,8 @@
 --- path: select_second
 > How are you?
 [advance]
+! waiting_for_choice
+? I'm doing great! | Not so good...
 [choice 1]
 > I'm sorry to hear that.
 ! done
