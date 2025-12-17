@@ -16,12 +16,8 @@ pub enum Stmt {
         parts: Vec<TextPart>,
         span: Span,
     },
-    TempDecl {
-        id: NodeId,
-        name: String,
-        value: Literal,
-        span: Span,
-    },
+    TempDecl(VarBindingData),
+    Assignment(VarBindingData),
     ChoiceSet {
         choices: Vec<Choice>,
     },
@@ -55,4 +51,13 @@ pub enum Literal {
     String(String),
     Number(f64),
     Bool(bool),
+}
+
+/// Shared data for variable binding operations (declarations and assignments)
+#[derive(Debug, Clone)]
+pub struct VarBindingData {
+    pub id: NodeId,
+    pub name: String,
+    pub value: Literal,
+    pub span: Span,
 }

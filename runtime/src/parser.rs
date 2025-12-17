@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::ast::{Choice, Literal, NodeId, Script, Stmt, TextPart};
+use crate::ast::{Choice, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::scanner::{LexicalError, offset_to_position};
 use crate::token::{Span, Token, TokenKind};
 
@@ -52,44 +52,80 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         id
     }
 
+    /// Check if the next token has the given kind (without consuming it)
+    fn check(&mut self, kind: TokenKind) -> bool {
+        matches!(self.tokens.peek(), Some(Ok(t)) if t.kind == kind)
+    }
+
+    /// Get the span of the current peeked token, or a zero-span if none
+    fn current_span(&mut self) -> Span {
+        match self.tokens.peek() {
+            Some(Ok(t)) => t.span,
+            _ => Span { start: 0, end: 0 },
+        }
+    }
+
+    /// Consume and return the next token.
+    /// Only call when you've already verified a token exists via peek/check.
+    fn advance(&mut self) -> Token<'a> {
+        self.tokens.next().unwrap().unwrap()
+    }
+
+    /// Try to parse a statement from the current token.
+    /// Returns None for non-statement tokens (NewLine, Indent, Dedent, Eof, etc.)
+    fn try_parse_statement(&mut self) -> Option<Stmt> {
+        match self.tokens.peek() {
+            Some(Ok(t)) => match t.kind {
+                TokenKind::Temp => Some(self.temp_declaration()),
+                TokenKind::Set => Some(self.assignment()),
+                TokenKind::TextSegment | TokenKind::OpenBrace => Some(self.line_statement()),
+                TokenKind::Choice => Some(self.choice_set()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     pub fn parse(mut self) -> Result<Script, Vec<ParseError>> {
         let mut statements = Vec::new();
 
         loop {
+            // Handle errors first
+            if matches!(self.tokens.peek(), Some(Err(_))) {
+                if let Some(Err(e)) = self.tokens.next() {
+                    self.errors.push(e.into());
+                }
+                self.synchronize();
+                continue;
+            }
+
+            // Try to parse a statement
+            if let Some(stmt) = self.try_parse_statement() {
+                statements.push(stmt);
+                continue;
+            }
+
+            // Handle non-statement tokens
             match self.tokens.peek() {
                 None => break,
-                Some(Err(_)) => {
-                    // Consume the error
-                    if let Some(Err(e)) = self.tokens.next() {
-                        self.errors.push(e.into());
-                    }
-                    self.synchronize();
-                }
                 Some(Ok(token)) => match token.kind {
-                    TokenKind::Temp => {
-                        statements.push(self.temp_declaration());
-                    }
-                    TokenKind::TextSegment | TokenKind::OpenBrace => {
-                        statements.push(self.line_statement());
-                    }
-                    TokenKind::Choice => {
-                        statements.push(self.choice_set());
-                    }
                     TokenKind::NewLine | TokenKind::Indent | TokenKind::Dedent => {
                         // Skip newlines and indent/dedent tokens at top level
-                        self.tokens.next();
+                        self.advance();
                     }
                     TokenKind::Eof => break,
                     _ => {
                         // Unexpected token at statement level
                         let span = token.span;
+                        let kind = token.kind;
                         self.errors.push(ParseError::Syntax {
-                            message: format!("Unexpected token: {:?}", token.kind),
+                            message: format!("Unexpected token: {:?}", kind),
                             span,
                         });
-                        self.tokens.next();
+                        self.advance();
                     }
                 },
+                Some(Err(_)) => unreachable!(), // Handled above
             }
         }
 
@@ -102,60 +138,16 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
 
     /// Parse a temp declaration: temp name = value
     fn temp_declaration(&mut self) -> Stmt {
-        let start_token = self.tokens.next().unwrap().unwrap(); // Consume 'temp'
-        let start = start_token.span.start;
-        let id = self.next_id();
+        let start_token = self.advance(); // Consume 'temp'
+        let data = self.parse_var_binding("temp", start_token.span.start);
+        Stmt::TempDecl(data)
+    }
 
-        // Expect identifier
-        let name = match self.tokens.peek() {
-            Some(Ok(t)) if t.kind == TokenKind::Identifier => {
-                let token = self.tokens.next().unwrap().unwrap();
-                token.lexeme.to_string()
-            }
-            _ => {
-                self.errors.push(ParseError::Syntax {
-                    message: "Expected identifier after 'temp'".to_string(),
-                    span: start_token.span,
-                });
-                self.synchronize();
-                return Stmt::TempDecl {
-                    id,
-                    name: String::new(),
-                    value: Literal::Bool(false),
-                    span: start_token.span,
-                };
-            }
-        };
-
-        // Expect '='
-        match self.tokens.peek() {
-            Some(Ok(t)) if t.kind == TokenKind::Equals => {
-                self.tokens.next();
-            }
-            _ => {
-                self.errors.push(ParseError::Syntax {
-                    message: "Expected '=' in temp declaration".to_string(),
-                    span: start_token.span,
-                });
-                self.synchronize();
-                return Stmt::TempDecl {
-                    id,
-                    name,
-                    value: Literal::Bool(false),
-                    span: start_token.span,
-                };
-            }
-        }
-
-        // Parse literal value
-        let (value, end) = self.parse_literal();
-
-        Stmt::TempDecl {
-            id,
-            name,
-            value,
-            span: Span { start, end },
-        }
+    /// Parse an assignment: set name = value
+    fn assignment(&mut self) -> Stmt {
+        let start_token = self.advance(); // Consume 'set'
+        let data = self.parse_var_binding("set", start_token.span.start);
+        Stmt::Assignment(data)
     }
 
     /// Parse a literal value (string, number, or boolean)
@@ -163,7 +155,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         match self.tokens.peek() {
             Some(Ok(t)) => match t.kind {
                 TokenKind::String => {
-                    let token = self.tokens.next().unwrap().unwrap();
+                    let token = self.advance();
                     // Remove quotes from the lexeme
                     let s = token.lexeme;
                     let unquoted = if s.len() >= 2 {
@@ -175,16 +167,16 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                     (Literal::String(unquoted), token.span.end)
                 }
                 TokenKind::Number => {
-                    let token = self.tokens.next().unwrap().unwrap();
+                    let token = self.advance();
                     let num: f64 = token.lexeme.parse().unwrap_or(0.0);
                     (Literal::Number(num), token.span.end)
                 }
                 TokenKind::True => {
-                    let token = self.tokens.next().unwrap().unwrap();
+                    let token = self.advance();
                     (Literal::Bool(true), token.span.end)
                 }
                 TokenKind::False => {
-                    let token = self.tokens.next().unwrap().unwrap();
+                    let token = self.advance();
                     (Literal::Bool(false), token.span.end)
                 }
                 _ => {
@@ -206,6 +198,60 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         }
     }
 
+    /// Parse a variable binding: identifier = literal
+    /// Used by both temp declarations and assignments.
+    /// The keyword token should already be consumed.
+    fn parse_var_binding(&mut self, keyword: &str, start: usize) -> VarBindingData {
+        let id = self.next_id();
+
+        // Expect identifier
+        let name = if self.check(TokenKind::Identifier) {
+            let token = self.advance();
+            token.lexeme.to_string()
+        } else {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: format!("Expected identifier after '{}'", keyword),
+                span,
+            });
+            self.synchronize();
+            return VarBindingData {
+                id,
+                name: String::new(),
+                value: Literal::Bool(false),
+                span: Span { start, end: start },
+            };
+        };
+
+        // Expect '='
+        if self.check(TokenKind::Equals) {
+            self.advance();
+        } else {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: format!("Expected '=' in {} statement", keyword),
+                span,
+            });
+            self.synchronize();
+            return VarBindingData {
+                id,
+                name,
+                value: Literal::Bool(false),
+                span: Span { start, end: start },
+            };
+        }
+
+        // Parse literal value
+        let (value, end) = self.parse_literal();
+
+        VarBindingData {
+            id,
+            name,
+            value,
+            span: Span { start, end },
+        }
+    }
+
     /// Parse a line statement (text content with possible interpolation)
     fn line_statement(&mut self) -> Stmt {
         let (parts, span) = self.parse_text_parts();
@@ -222,7 +268,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             match self.tokens.peek() {
                 Some(Ok(t)) => match t.kind {
                     TokenKind::TextSegment => {
-                        let token = self.tokens.next().unwrap().unwrap();
+                        let token = self.advance();
                         if start.is_none() {
                             start = Some(token.span.start);
                         }
@@ -233,7 +279,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                         });
                     }
                     TokenKind::OpenBrace => {
-                        let open = self.tokens.next().unwrap().unwrap();
+                        let open = self.advance();
                         if start.is_none() {
                             start = Some(open.span.start);
                         }
@@ -241,13 +287,13 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                         // Expect identifier
                         match self.tokens.peek() {
                             Some(Ok(t)) if t.kind == TokenKind::Identifier => {
-                                let id_token = self.tokens.next().unwrap().unwrap();
+                                let id_token = self.advance();
                                 let var_name = id_token.lexeme.to_string();
 
                                 // Expect close brace
                                 match self.tokens.peek() {
                                     Some(Ok(t)) if t.kind == TokenKind::CloseBrace => {
-                                        let close = self.tokens.next().unwrap().unwrap();
+                                        let close = self.advance();
                                         end = close.span.end;
                                         parts.push(TextPart::VarRef {
                                             id: self.next_id(),
@@ -307,7 +353,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
 
         loop {
             // Consume the Choice token ("- ")
-            let choice_token = self.tokens.next().unwrap().unwrap();
+            let choice_token = self.advance();
             let start = choice_token.span.start;
 
             // Parse the choice text (may contain interpolation)
@@ -328,7 +374,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                 break;
             }
 
-            self.tokens.next(); // Consume the NewLine
+            self.advance(); // Consume the NewLine
 
             // Parse any nested content under this choice
             let nested = self.parse_nested_content();
@@ -354,42 +400,44 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             return Vec::new();
         }
 
-        self.tokens.next(); // Consume the Indent
+        self.advance(); // Consume the Indent
 
         let mut statements = Vec::new();
 
         loop {
+            // Handle errors first
+            if matches!(self.tokens.peek(), Some(Err(_))) {
+                if let Some(Err(e)) = self.tokens.next() {
+                    self.errors.push(e.into());
+                }
+                self.synchronize();
+                continue;
+            }
+
+            // Try to parse a statement
+            if let Some(stmt) = self.try_parse_statement() {
+                statements.push(stmt);
+                continue;
+            }
+
+            // Handle non-statement tokens
             match self.tokens.peek() {
                 None => break,
-                Some(Err(_)) => {
-                    if let Some(Err(e)) = self.tokens.next() {
-                        self.errors.push(e.into());
-                    }
-                    self.synchronize();
-                }
                 Some(Ok(token)) => match token.kind {
                     TokenKind::Dedent => {
-                        self.tokens.next(); // Consume Dedent
+                        self.advance(); // Consume Dedent
                         break;
                     }
-                    TokenKind::Temp => {
-                        statements.push(self.temp_declaration());
-                    }
-                    TokenKind::TextSegment | TokenKind::OpenBrace => {
-                        statements.push(self.line_statement());
-                    }
-                    TokenKind::Choice => {
-                        statements.push(self.choice_set());
-                    }
                     TokenKind::NewLine | TokenKind::Indent => {
-                        self.tokens.next();
+                        self.advance();
                     }
                     TokenKind::Eof => break,
                     _ => {
                         // Skip unexpected tokens
-                        self.tokens.next();
+                        self.advance();
                     }
                 },
+                Some(Err(_)) => unreachable!(), // Handled above
             }
         }
 

@@ -1,0 +1,4 @@
+temp greeting = "Hello"
+{greeting}, world!
+set greeting = "Goodbye"
+{greeting}, world!

@@ -45,7 +45,6 @@ pub struct Scanner<'a> {
     start: usize,
     /// Byte offset of current position
     current: usize,
-    line: usize,
     indent_stack: Vec<usize>,
     pending_dedents: usize,
     /// Current scanning mode
@@ -58,7 +57,6 @@ impl<'a> Scanner<'a> {
             source,
             start: 0,
             current: 0,
-            line: 1,
             indent_stack: vec![0],
             pending_dedents: 0,
             mode: ScanMode::Indentation,
@@ -107,33 +105,52 @@ impl<'a> Scanner<'a> {
 
     /// Scan at the start of a line - check for keywords, choice marker, or text
     fn scan_line_start(&mut self) -> Result<Token<'a>, LexicalError> {
-        // Check for keywords
-        if self.check_keyword("temp ") {
-            self.advance_n(5); // "temp "
-            self.mode = ScanMode::Declaration;
-            return Ok(self.make_token(TokenKind::Temp));
+        // Declaration keywords
+        if let Some(tok) = self.try_keyword("temp", TokenKind::Temp, ScanMode::Declaration) {
+            return Ok(tok);
         }
-        if self.check_keyword("save ") {
-            self.advance_n(5); // "save "
-            self.mode = ScanMode::Declaration;
-            return Ok(self.make_token(TokenKind::Save));
+        if let Some(tok) = self.try_keyword("save", TokenKind::Save, ScanMode::Declaration) {
+            return Ok(tok);
         }
-        if self.check_keyword("set ") {
-            self.advance_n(4); // "set "
-            self.mode = ScanMode::Declaration;
-            return Ok(self.make_token(TokenKind::Set));
+        if let Some(tok) = self.try_keyword("set", TokenKind::Set, ScanMode::Declaration) {
+            return Ok(tok);
         }
 
-        // Check for choice marker
-        if self.check_keyword("- ") {
-            self.advance_n(2); // "- "
-            self.mode = ScanMode::Text;
-            return Ok(self.make_token(TokenKind::Choice));
+        // Choice marker
+        if let Some(tok) = self.try_keyword("-", TokenKind::Choice, ScanMode::Text) {
+            return Ok(tok);
         }
 
         // Otherwise it's text content
         self.mode = ScanMode::Text;
         self.scan_text_content()
+    }
+
+    /// Try to match a keyword followed by space. Returns token if matched.
+    /// The token lexeme contains only the keyword (not the trailing space).
+    fn try_keyword(
+        &mut self,
+        keyword: &str,
+        kind: TokenKind,
+        next_mode: ScanMode,
+    ) -> Option<Token<'a>> {
+        let remaining = &self.source[self.current..];
+
+        // Must match keyword
+        if !remaining.starts_with(keyword) {
+            return None;
+        }
+
+        // Must be followed by space (word boundary)
+        if !remaining[keyword.len()..].starts_with(' ') {
+            return None;
+        }
+
+        self.advance_n(keyword.len());
+        let token = self.make_token(kind);
+        self.skip_spaces();
+        self.mode = next_mode;
+        Some(token)
     }
 
     /// Scan declaration content: identifier = literal
@@ -451,7 +468,6 @@ impl<'a> Scanner<'a> {
         match self.peek() {
             Some('\n') => {
                 self.advance();
-                self.line += 1;
                 true
             }
             Some('\r') => {
@@ -459,7 +475,6 @@ impl<'a> Scanner<'a> {
                 if self.peek() == Some('\n') {
                     self.advance();
                 }
-                self.line += 1;
                 true
             }
             _ => false,
@@ -486,15 +501,6 @@ impl<'a> Scanner<'a> {
         let mut chars = self.source[self.current..].chars();
         chars.next();
         chars.next()
-    }
-
-    fn peek_at(&self, offset: usize) -> Option<char> {
-        self.source[self.current..].chars().nth(offset)
-    }
-
-    /// Check if the source starting at current position matches the given string
-    fn check_keyword(&self, keyword: &str) -> bool {
-        self.source[self.current..].starts_with(keyword)
     }
 
     fn skip_spaces(&mut self) {
