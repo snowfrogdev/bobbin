@@ -97,7 +97,6 @@ impl<'a> Resolver<'a> {
         if self.errors.is_empty() {
             Ok(SymbolTable {
                 bindings: self.bindings,
-                max_slots: self.max_slot,
             })
         } else {
             Err(self.errors)
