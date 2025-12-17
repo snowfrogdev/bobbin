@@ -14,12 +14,13 @@ mod compiler;
 mod parser;
 mod resolver;
 mod scanner;
+mod token;
 mod vm;
 
 #[derive(Debug)]
 pub enum BobbinError {
     Parse(Vec<ParseError>),
-    Semantic(SemanticError),
+    Semantic(Vec<SemanticError>),
     Compile(CompileError),
 }
 
@@ -29,9 +30,9 @@ impl From<Vec<ParseError>> for BobbinError {
     }
 }
 
-impl From<SemanticError> for BobbinError {
-    fn from(err: SemanticError) -> Self {
-        BobbinError::Semantic(err)
+impl From<Vec<SemanticError>> for BobbinError {
+    fn from(errors: Vec<SemanticError>) -> Self {
+        BobbinError::Semantic(errors)
     }
 }
 
@@ -47,8 +48,8 @@ impl fmt::Display for BobbinError {
             BobbinError::Parse(errors) => {
                 write!(f, "{} parse error(s)", errors.len())
             }
-            BobbinError::Semantic(err) => {
-                write!(f, "semantic error: {:?}", err)
+            BobbinError::Semantic(errors) => {
+                write!(f, "{} semantic error(s)", errors.len())
             }
             BobbinError::Compile(err) => {
                 write!(f, "compile error: {:?}", err)
@@ -66,7 +67,11 @@ impl BobbinError {
                 .map(|e| e.format_with_source(source))
                 .collect::<Vec<_>>()
                 .join("\n"),
-            BobbinError::Semantic(err) => format!("semantic error: {:?}", err),
+            BobbinError::Semantic(errors) => errors
+                .iter()
+                .map(|e| e.format_with_source(source))
+                .collect::<Vec<_>>()
+                .join("\n"),
             BobbinError::Compile(err) => format!("compile error: {:?}", err),
         }
     }
@@ -85,7 +90,7 @@ impl Runtime {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
         let symbols = Resolver::new(&ast).analyze()?;
-        let chunk = Compiler::new(ast, symbols).compile()?;
+        let chunk = Compiler::new(&ast, &symbols).compile()?;
 
         let mut runtime = Self {
             vm: VM::new(chunk),

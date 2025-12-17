@@ -3,6 +3,18 @@ pub enum Instruction {
     Constant {
         index: usize,
     },
+    /// Copy value from stack[slot] to top of stack.
+    GetLocal {
+        slot: usize,
+    },
+    /// Pop top of stack and write to stack[slot].
+    SetLocal {
+        slot: usize,
+    },
+    /// Pop `count` values, concatenate as strings, push result.
+    Concat {
+        count: usize,
+    },
     Line,
     /// Present choices to the user. VM pauses for selection.
     /// On resume, jumps to targets[selected_index].
@@ -20,6 +32,26 @@ pub enum Instruction {
 #[derive(Debug, Clone)]
 pub enum Value {
     String(String),
+    Number(f64),
+    Bool(bool),
+}
+
+impl Value {
+    /// Convert value to string representation for interpolation.
+    pub fn to_string_value(&self) -> String {
+        match self {
+            Value::String(s) => s.clone(),
+            Value::Number(n) => {
+                // Format integers without decimal point
+                if n.fract() == 0.0 {
+                    format!("{}", *n as i64)
+                } else {
+                    format!("{}", n)
+                }
+            }
+            Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]

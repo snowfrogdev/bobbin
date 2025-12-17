@@ -12,10 +12,17 @@ impl std::fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             RuntimeError::NotAtChoice => {
-                write!(f, "select_and_continue called but VM is not waiting for a choice")
+                write!(
+                    f,
+                    "select_and_continue called but VM is not waiting for a choice"
+                )
             }
             RuntimeError::InvalidChoiceIndex { index, count } => {
-                write!(f, "choice index {} out of bounds (only {} choices)", index, count)
+                write!(
+                    f,
+                    "choice index {} out of bounds (only {} choices)",
+                    index, count
+                )
             }
         }
     }
@@ -97,9 +104,27 @@ impl VM {
                     let value = self.chunk.constants[index].clone();
                     self.stack.push(value);
                 }
+                Instruction::GetLocal { slot } => {
+                    let value = self.stack[slot].clone();
+                    self.stack.push(value);
+                }
+                Instruction::SetLocal { slot } => {
+                    let value = self.stack.pop().expect("stack underflow: compiler bug");
+                    self.stack[slot] = value;
+                }
+                Instruction::Concat { count } => {
+                    // Pop `count` values and concatenate as strings
+                    let start = self.stack.len() - count;
+                    let mut result = String::new();
+                    for i in start..self.stack.len() {
+                        result.push_str(&self.stack[i].to_string_value());
+                    }
+                    self.stack.truncate(start);
+                    self.stack.push(Value::String(result));
+                }
                 Instruction::Line => {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
-                    let Value::String(text) = value;
+                    let text = value.to_string_value();
                     return StepResult::Line(text);
                 }
                 Instruction::ChoiceSet { count, .. } => {
@@ -107,7 +132,7 @@ impl VM {
                     let mut choices = Vec::with_capacity(count);
                     for _ in 0..count {
                         let value = self.stack.pop().expect("stack underflow: compiler bug");
-                        let Value::String(text) = value;
+                        let text = value.to_string_value();
                         choices.push(text);
                     }
                     choices.reverse();
@@ -119,10 +144,7 @@ impl VM {
                     self.ip = target;
                 }
                 Instruction::Return => {
-                    debug_assert!(
-                        self.stack.is_empty(),
-                        "stack not empty at return: compiler bug"
-                    );
+                    // Note: stack may have locals remaining, that's OK
                     return StepResult::Done;
                 }
             }

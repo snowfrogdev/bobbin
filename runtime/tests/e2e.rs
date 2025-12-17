@@ -341,3 +341,17 @@ fn test_invalid_tabs_rejected() {
         }
     }
 }
+
+// =============================================================================
+// Variable and Interpolation Tests
+// =============================================================================
+
+#[test]
+fn test_temp_variable_with_interpolation() {
+    let source = include_str!("fixtures/variables_interpolation.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // The interpolation should substitute {name} with "World"
+    assert_eq!(runtime.current_line(), "Hello, World!");
+    assert!(!runtime.has_more());
+}
