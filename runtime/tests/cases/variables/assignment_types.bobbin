@@ -1,0 +1,10 @@
+temp value = "initial"
+Value is: {value}
+set value = 42
+Value is: {value}
+set value = true
+Value is: {value}
+set value = 3.14
+Value is: {value}
+set value = "back to string"
+Value is: {value}

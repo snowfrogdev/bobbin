@@ -1,0 +1,9 @@
+temp mood = "neutral"
+The hero feels {mood}.
+- Cheer up
+    set mood = "happy"
+    Mood changed to {mood}.
+- Get angry
+    set mood = "angry"
+    Mood changed to {mood}.
+The hero now feels {mood}.

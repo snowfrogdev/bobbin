@@ -1,0 +1,2 @@
+temp greeting = "Hello"
+set greting = "Goodbye"

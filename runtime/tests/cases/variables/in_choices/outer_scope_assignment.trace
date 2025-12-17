@@ -1,0 +1,21 @@
+# Test that set modifies outer-scope variables from within choice branches
+
+--- path: cheer_up
+> The hero feels neutral.
+[advance]
+! waiting_for_choice
+[choice 0]
+> Mood changed to happy.
+[advance]
+> The hero now feels happy.
+! done
+
+--- path: get_angry
+> The hero feels neutral.
+[advance]
+! waiting_for_choice
+[choice 1]
+> Mood changed to angry.
+[advance]
+> The hero now feels angry.
+! done

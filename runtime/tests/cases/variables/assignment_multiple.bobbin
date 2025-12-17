@@ -1,0 +1,8 @@
+temp counter = 0
+Count: {counter}
+set counter = 1
+Count: {counter}
+set counter = 2
+Count: {counter}
+set counter = 3
+Count: {counter}

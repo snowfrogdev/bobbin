@@ -1,4 +1,4 @@
-use crate::ast::{Literal, NodeId, Script, Stmt, TextPart};
+use crate::ast::{Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::chunk::{Chunk, Instruction, Value};
 use crate::resolver::SymbolTable;
 
@@ -41,20 +41,18 @@ impl<'a> Compiler<'a> {
 
     fn compile_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::TempDecl {
-                id, value, span, ..
-            } => {
-                // Push the initial value onto the stack.
-                // The value will live at its assigned slot position.
+            Stmt::TempDecl(VarBindingData { value, span, .. }) => {
+                // Push initial value onto stack.
+                // The value lives at its assigned slot position (implicit from declaration order).
+                self.compile_literal(value, span.start);
+            }
+            Stmt::Assignment(VarBindingData { id, value, span, .. }) => {
+                // Assignment modifies an existing variable's slot.
+                // Unlike TempDecl (where slot is implicit from stack position),
+                // here we explicitly look up the slot allocated during declaration.
                 let slot = self.get_slot(*id);
                 self.compile_literal(value, span.start);
-
-                // For declarations, the value is already at the right position
-                // if slots are assigned in declaration order. But to be safe
-                // and support future reassignment, we could emit SetLocal.
-                // For now, declarations just leave the value on stack at slot position.
-                // This works because declarations happen in slot order.
-                let _ = slot; // Slot is implicit from stack position
+                self.chunk.emit(Instruction::SetLocal { slot }, span.start);
             }
             Stmt::Line { parts, span } => {
                 self.compile_text_parts(parts, span.start);
