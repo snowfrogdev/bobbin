@@ -34,8 +34,12 @@ boolean    = "true" | "false" ;
 
 letter = "a" | ... | "z" | "A" | ... | "Z" ;
 digit  = "0" | ... | "9" ;
-text   = { char }+ ;
-char   = ? any character except newline ? ;
+
+text          = { text_segment }+ ;
+text_segment  = text_char | interpolation | escaped_brace ;
+interpolation = "{" , identifier , "}" ;
+escaped_brace = "{{" | "}}" ;
+text_char     = ? any character except "{", "}", and newline ? ;
 ```
 
 ## Notes
@@ -72,6 +76,13 @@ char   = ? any character except newline ? ;
 - Sibling statements must use the same indentation level
 - No fixed number of spaces per level is required, but consistency is enforced
 
+### Interpolation
+
+- Lines and choice text may contain interpolations: `{variable_name}`
+- Use `{{` for a literal `{` character, `}}` for a literal `}`
+- Only variable names are currently supported (expressions TBD)
+- Example: `Welcome, {player_name}! You have {gold} gold.`
+
 ## Future Syntax (TBD)
 
 The following syntax elements are planned but not yet specified:
@@ -80,5 +91,5 @@ The following syntax elements are planned but not yet specified:
 - **Expressions**: Arithmetic, comparison, and logical operators
 - **Conditionals**: `if`/`else` structure
 - **Tables**: Literal syntax, access syntax, methods
-- **Interpolation**: Expression grammar inside `{...}`
+- **Interpolation expressions**: Expressions beyond variable names inside `{...}`
 - **Imports**: Module system syntax

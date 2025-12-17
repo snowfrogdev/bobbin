@@ -81,6 +81,39 @@ This produces a compile error: "Cannot declare 'gold': name conflicts with game 
 
 **Rationale**: Silent shadowing would cause confusion. Explicit errors make the conflict visible.
 
+### Interpolation
+
+**Decision**: Curly brace delimiters with variable-only content (Phase 1).
+
+Bobbin uses `{variable_name}` to embed variable values in dialogue text:
+
+```
+save player_name = "Hero"
+save gold = 100
+
+Welcome, {player_name}! You have {gold} gold pieces.
+```
+
+**Escape mechanism**: Use `{{` for a literal `{` character, `}}` for literal `}`:
+
+```
+To show braces: {{like this}}
+```
+
+**Rationale**:
+
+- Familiar syntax (matches Ink, Python f-strings, C#, Yarn Spinner)
+- Clean in prose - minimal visual noise
+- `{{` escape is standard and intuitive
+
+**Alternatives considered**:
+
+- `[var]` (Ren'Py style) - less familiar; conflicts with future array access
+- `${var}` (JavaScript style) - more verbose; `$` might conflict with variable prefixes
+- `$var` (naked sigil) - ambiguous boundaries (`$goldfish`?)
+
+**Phase 1 scope**: Only variable names are allowed inside `{...}`. Arithmetic expressions and function calls are TBD for a future phase.
+
 ## To Be Decided
 
 The following design decisions need to be made before implementation:
@@ -109,13 +142,16 @@ The following design decisions need to be made before implementation:
 - Safe access method: `.get(key, default)` or `table["key"] or default`?
 - Membership test: `"key" in table` or `table.has("key")`?
 
-### Interpolation
+### Interpolation Expressions
 
 **Questions**:
-- Confirmed: curly braces `{...}` for interpolation
-- What expressions are allowed inside?
-- Can assignments appear inside? (probably not)
-- Escape syntax for literal braces?
+
+- What expressions beyond variable names should be allowed inside `{...}`?
+- Arithmetic: `{gold * 2}`?
+- Function calls: `{get_title(npc)}`?
+- Inline conditionals: `{if gold > 0 then "some" else "no"}`?
+
+Note: Basic interpolation syntax (`{var}` and `{{` escape) is decided - see "Decided" section above.
 
 ### Compound Assignment
 
