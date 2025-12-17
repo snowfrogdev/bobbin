@@ -1,0 +1,19 @@
+# Mix of choices with and without content
+
+--- path: talk
+> What do you want to do?
+[advance]
+! waiting_for_choice
+? Talk | Leave
+[choice 0]  # Has content
+> Let's chat!
+[advance]
+> Goodbye!
+! done
+
+--- path: leave
+> What do you want to do?
+[advance]
+[choice 1]  # No content - goes directly to gather
+> Goodbye!
+! done

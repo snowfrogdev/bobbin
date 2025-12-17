@@ -1,0 +1,16 @@
+# Basic choice test - just choices with no content
+
+--- path: select_first
+> How are you?
+[advance]
+! waiting_for_choice
+? Good | Bad
+[choice 0]
+! done
+
+--- path: select_second
+> How are you?
+[advance]
+? Good | Bad
+[choice 1]
+! done

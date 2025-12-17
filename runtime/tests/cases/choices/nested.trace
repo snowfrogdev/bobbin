@@ -1,0 +1,44 @@
+# Nested choices - choice within choice
+
+--- path: talk_to_alice
+> What do you want to do?
+[advance]
+! waiting_for_choice
+? Talk to someone | Leave
+[choice 0]
+> Who would you like to talk to?
+[advance]
+! waiting_for_choice
+? Alice | Bob
+[choice 0]
+> You chat with Alice.
+[advance]
+> That was a nice conversation.
+[advance]
+> The end.
+! done
+
+--- path: talk_to_bob
+> What do you want to do?
+[advance]
+[choice 0]
+> Who would you like to talk to?
+[advance]
+? Alice | Bob
+[choice 1]
+> You chat with Bob.
+[advance]
+> That was a nice conversation.
+[advance]
+> The end.
+! done
+
+--- path: leave
+> What do you want to do?
+[advance]
+? Talk to someone | Leave
+[choice 1]
+> Goodbye!
+[advance]
+> The end.
+! done

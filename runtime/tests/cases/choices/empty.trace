@@ -1,0 +1,17 @@
+# Choices with no content - go directly to gather point
+
+--- path: select_first
+> What's your name?
+[advance]
+! waiting_for_choice
+? Alice | Bob
+[choice 0]
+> Nice to meet you!
+! done
+
+--- path: select_second
+> What's your name?
+[advance]
+[choice 1]
+> Nice to meet you!
+! done

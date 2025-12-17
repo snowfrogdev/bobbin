@@ -1,0 +1,15 @@
+# Multiple sequential choice sets
+
+--- path: yes_blue
+> First question?
+[advance]
+! waiting_for_choice
+? Yes | No
+[choice 0]
+> Second question?
+[advance]
+! waiting_for_choice
+? Red | Blue
+[choice 1]
+> Done!
+! done

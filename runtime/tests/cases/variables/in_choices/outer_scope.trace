@@ -1,0 +1,22 @@
+# Access outer scope variables from within choice branches
+
+--- path: enter_cave
+> Welcome, Hero!
+[advance]
+! waiting_for_choice
+[choice 0]
+> Hero enters the cave.
+[advance]
+> It is dark inside.
+[advance]
+> The adventure continues for Hero.
+! done
+
+--- path: stay_outside
+> Welcome, Hero!
+[advance]
+[choice 1]
+> Hero waits outside.
+[advance]
+> The adventure continues for Hero.
+! done

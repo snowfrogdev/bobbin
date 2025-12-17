@@ -1,0 +1,17 @@
+# Variable interpolation in choice text
+
+--- path: keep
+> What will you do with the sword?
+[advance]
+! waiting_for_choice
+? Keep the sword | Drop the sword
+[choice 0]
+> You kept the sword.
+! done
+
+--- path: drop
+> What will you do with the sword?
+[advance]
+[choice 1]
+> You dropped the sword.
+! done

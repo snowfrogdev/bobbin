@@ -1,0 +1,25 @@
+# Choices that converge to a gather point
+
+--- path: door_a
+> Pick a door:
+[advance]
+! waiting_for_choice
+? Door A | Door B
+[choice 0]
+> You chose door A.
+[advance]
+> The adventure continues...
+[advance]
+> Goodbye!
+! done
+
+--- path: door_b
+> Pick a door:
+[advance]
+[choice 1]
+> You chose door B.
+[advance]
+> The adventure continues...
+[advance]
+> Goodbye!
+! done

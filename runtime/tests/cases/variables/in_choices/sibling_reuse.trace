@@ -1,0 +1,16 @@
+# Same variable name reused in sibling choice branches
+
+--- path: path_a
+> Choose wisely:
+[advance]
+! waiting_for_choice
+[choice 0]
+> Hero gets gold.
+! done
+
+--- path: path_b
+> Choose wisely:
+[advance]
+[choice 1]
+> Hero gets silver.
+! done

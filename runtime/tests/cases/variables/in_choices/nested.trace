@@ -1,0 +1,16 @@
+# Local variables declared within choice branches
+
+--- path: left
+> Choose your path:
+[advance]
+! waiting_for_choice
+[choice 0]
+> Hero finds gold!
+! done
+
+--- path: right
+> Choose your path:
+[advance]
+[choice 1]
+> Hero encounters a dragon!
+! done
