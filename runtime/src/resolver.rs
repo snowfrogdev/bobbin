@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Choice, NodeId, Script, Stmt, TextPart};
+use crate::ast::{Choice, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::scanner::offset_to_position;
 use crate::token::Span;
 
@@ -68,7 +68,6 @@ pub struct Resolver<'a> {
     ast: &'a Script,
     scopes: Vec<Scope>,
     next_slot: usize,
-    max_slot: usize, // high water mark
     bindings: HashMap<NodeId, usize>,
     errors: Vec<SemanticError>,
 }
@@ -82,7 +81,6 @@ impl<'a> Resolver<'a> {
                 start_slot: 0,
             }], // Start with global scope
             next_slot: 0,
-            max_slot: 0,
             bindings: HashMap::new(),
             errors: Vec::new(),
         }
@@ -105,8 +103,11 @@ impl<'a> Resolver<'a> {
 
     fn resolve_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::TempDecl { id, name, span, .. } => {
+            Stmt::TempDecl(VarBindingData { id, name, span, .. }) => {
                 self.declare(*id, name, *span);
+            }
+            Stmt::Assignment(VarBindingData { id, name, span, .. }) => {
+                self.resolve_reference(*id, name, *span);
             }
             Stmt::Line { parts, .. } => {
                 self.resolve_text_parts(parts);
@@ -182,9 +183,6 @@ impl<'a> Resolver<'a> {
         // Assign slot
         let slot = self.next_slot;
         self.next_slot += 1;
-        if self.next_slot > self.max_slot {
-            self.max_slot = self.next_slot;
-        }
 
         // Record in current scope
         current_scope
