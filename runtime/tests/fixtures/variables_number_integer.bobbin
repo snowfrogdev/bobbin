@@ -1,0 +1,3 @@
+temp gold = 100
+temp items = 3
+You have {gold} gold and {items} items.

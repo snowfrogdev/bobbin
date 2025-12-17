@@ -147,11 +147,6 @@ impl<'a> Scanner<'a> {
 
         let c = self.peek().unwrap();
 
-        // Identifier
-        if c.is_ascii_alphabetic() || c == '_' {
-            return self.scan_identifier();
-        }
-
         // Equals
         if c == '=' {
             self.advance();
@@ -169,22 +164,9 @@ impl<'a> Scanner<'a> {
             return self.scan_number();
         }
 
-        // Boolean literals
-        if self.check_keyword("true")
-            && !self
-                .peek_at(4)
-                .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
-            self.advance_n(4);
-            return Ok(self.make_token(TokenKind::True));
-        }
-        if self.check_keyword("false")
-            && !self
-                .peek_at(5)
-                .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
-            self.advance_n(5);
-            return Ok(self.make_token(TokenKind::False));
+        // Identifier or keyword (true/false)
+        if c.is_ascii_alphabetic() || c == '_' {
+            return self.scan_identifier_or_keyword();
         }
 
         Err(self.error("Unexpected character in declaration"))
@@ -261,6 +243,7 @@ impl<'a> Scanner<'a> {
         self.start = self.current;
 
         if self.is_at_end() || self.is_at_newline() {
+            self.mode = ScanMode::Text;
             return Err(self.error("Unclosed interpolation - expected '}'"));
         }
 
@@ -278,7 +261,9 @@ impl<'a> Scanner<'a> {
             return self.scan_identifier();
         }
 
-        Err(self.error("Expected identifier in interpolation"))
+        // Error recovery: advance past the invalid character to avoid infinite loop
+        self.advance();
+        Err(self.error("Invalid character in interpolation"))
     }
 
     /// Scan an identifier
@@ -291,6 +276,27 @@ impl<'a> Scanner<'a> {
             }
         }
         Ok(self.make_token(TokenKind::Identifier))
+    }
+
+    /// Scan an identifier, then check if it's a keyword (true/false).
+    /// Used in declaration context where both identifiers and boolean literals are valid.
+    fn scan_identifier_or_keyword(&mut self) -> Result<Token<'a>, LexicalError> {
+        while let Some(c) = self.peek() {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                self.advance();
+            } else {
+                break;
+            }
+        }
+
+        let lexeme = &self.source[self.start..self.current];
+        let kind = match lexeme {
+            "true" => TokenKind::True,
+            "false" => TokenKind::False,
+            _ => TokenKind::Identifier,
+        };
+
+        Ok(self.make_token(kind))
     }
 
     /// Scan a string literal

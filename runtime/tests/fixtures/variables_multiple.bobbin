@@ -1,0 +1,4 @@
+temp greeting = "Hello"
+temp name = "Alice"
+temp punctuation = "!"
+{greeting}, {name}{punctuation}

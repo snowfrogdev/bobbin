@@ -1,0 +1,3 @@
+temp price = 19.99
+temp tax = 0.5
+The price is {price} plus {tax} tax.

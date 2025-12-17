@@ -1,0 +1,8 @@
+temp player = "Hero"
+Choose your path:
+- Go left
+    temp treasure = "gold"
+    {player} finds {treasure}!
+- Go right
+    temp enemy = "dragon"
+    {player} encounters a {enemy}!

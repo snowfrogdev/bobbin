@@ -1,0 +1,4 @@
+temp name = "Alice"
+Hello {{name}} is the syntax.
+The value is {name}.
+Use {{}} for literal braces.

@@ -1,0 +1,4 @@
+temp debt = -500
+temp temperature = -10.5
+You owe {debt} gold.
+It is {temperature} degrees outside.

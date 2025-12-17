@@ -355,3 +355,314 @@ fn test_temp_variable_with_interpolation() {
     assert_eq!(runtime.current_line(), "Hello, World!");
     assert!(!runtime.has_more());
 }
+
+#[test]
+fn test_multiple_variables() {
+    let source = include_str!("fixtures/variables_multiple.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "Hello, Alice!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_number_integer_interpolation() {
+    let source = include_str!("fixtures/variables_number_integer.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Integers should display without decimal point
+    assert_eq!(runtime.current_line(), "You have 100 gold and 3 items.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_number_float_interpolation() {
+    let source = include_str!("fixtures/variables_number_float.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "The price is 19.99 plus 0.5 tax.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_boolean_interpolation() {
+    let source = include_str!("fixtures/variables_boolean.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "Door is open: true");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "Door is locked: false");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_negative_number_interpolation() {
+    let source = include_str!("fixtures/variables_negative_number.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "You owe -500 gold.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "It is -10.5 degrees outside.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_empty_string_interpolation() {
+    let source = include_str!("fixtures/variables_empty_string.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // Empty string should produce no visible characters
+    assert_eq!(runtime.current_line(), "HelloWorld");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_escaped_braces() {
+    let source = include_str!("fixtures/variables_escaped_braces.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    // {{ should produce literal {
+    assert_eq!(runtime.current_line(), "Hello {name} is the syntax.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "The value is Alice.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "Use {} for literal braces.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_variable_used_multiple_times() {
+    let source = include_str!("fixtures/variables_used_multiple_times.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "The Knight enters the room.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "The Knight draws a sword.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "Go, Knight, go!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_variable_in_choice_text() {
+    let source = include_str!("fixtures/variables_in_choice_text.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "What will you do with the sword?");
+    runtime.advance();
+
+    // Choice text should have interpolation
+    assert!(runtime.is_waiting_for_choice());
+    assert_eq!(
+        runtime.current_choices(),
+        &["Keep the sword", "Drop the sword"]
+    );
+
+    runtime.select_choice(0).unwrap();
+    assert_eq!(runtime.current_line(), "You kept the sword.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_variable_in_choice_text_second_option() {
+    let source = include_str!("fixtures/variables_in_choice_text.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    runtime.advance(); // Skip to choice
+    runtime.select_choice(1).unwrap();
+    assert_eq!(runtime.current_line(), "You dropped the sword.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_outer_scope_variable_in_choice() {
+    let source = include_str!("fixtures/variables_outer_scope_in_choice.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "Welcome, Hero!");
+    runtime.advance();
+    runtime.select_choice(0).unwrap();
+
+    // Variable from outer scope should be accessible
+    assert_eq!(runtime.current_line(), "Hero enters the cave.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "It is dark inside.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "The adventure continues for Hero.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_outer_scope_variable_second_choice() {
+    let source = include_str!("fixtures/variables_outer_scope_in_choice.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    runtime.advance(); // Skip to choice
+    runtime.select_choice(1).unwrap();
+    assert_eq!(runtime.current_line(), "Hero waits outside.");
+    runtime.advance();
+    assert_eq!(runtime.current_line(), "The adventure continues for Hero.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_variables_in_nested_choice_left() {
+    let source = include_str!("fixtures/variables_in_nested_choice.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "Choose your path:");
+    runtime.advance();
+    runtime.select_choice(0).unwrap();
+
+    // Local variable in choice branch
+    assert_eq!(runtime.current_line(), "Hero finds gold!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_variables_in_nested_choice_right() {
+    let source = include_str!("fixtures/variables_in_nested_choice.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    runtime.advance();
+    runtime.select_choice(1).unwrap();
+
+    // Different local variable in other choice branch
+    assert_eq!(runtime.current_line(), "Hero encounters a dragon!");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_sibling_scope_variable_reuse() {
+    // Same variable name in sibling scopes should be allowed
+    // (they don't shadow each other since scopes are popped)
+    let source = include_str!("fixtures/variables_sibling_scope_reuse.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    assert_eq!(runtime.current_line(), "Choose wisely:");
+    runtime.advance();
+    runtime.select_choice(0).unwrap();
+    assert_eq!(runtime.current_line(), "Hero gets gold.");
+    assert!(!runtime.has_more());
+}
+
+#[test]
+fn test_sibling_scope_variable_reuse_second() {
+    let source = include_str!("fixtures/variables_sibling_scope_reuse.bobbin");
+    let mut runtime = Runtime::new(source).unwrap();
+
+    runtime.advance();
+    runtime.select_choice(1).unwrap();
+    assert_eq!(runtime.current_line(), "Hero gets silver.");
+    assert!(!runtime.has_more());
+}
+
+// =============================================================================
+// Semantic Error Tests
+// =============================================================================
+
+#[test]
+fn test_error_undefined_variable() {
+    let source = include_str!("fixtures/error_undefined_variable.bobbin");
+
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for undefined variable"),
+        Err(err) => {
+            let err_string = err.format_with_source(source);
+            assert!(
+                err_string.contains("undefined") && err_string.contains("name"),
+                "Error message should mention undefined variable 'name': {}",
+                err_string
+            );
+        }
+    }
+}
+
+#[test]
+fn test_error_shadowing_in_choice() {
+    let source = include_str!("fixtures/error_shadowing_in_choice.bobbin");
+
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for variable shadowing"),
+        Err(err) => {
+            let err_string = err.format_with_source(source);
+            assert!(
+                err_string.contains("shadow") && err_string.contains("name"),
+                "Error message should mention shadowing of 'name': {}",
+                err_string
+            );
+        }
+    }
+}
+
+#[test]
+fn test_error_redeclaration_same_scope() {
+    let source = include_str!("fixtures/error_redeclaration.bobbin");
+
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for variable redeclaration"),
+        Err(err) => {
+            let err_string = err.format_with_source(source);
+            assert!(
+                err_string.contains("shadow") && err_string.contains("name"),
+                "Error message should mention redeclaration of 'name': {}",
+                err_string
+            );
+        }
+    }
+}
+
+#[test]
+fn test_error_unclosed_interpolation() {
+    let source = include_str!("fixtures/error_unclosed_interpolation.bobbin");
+
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for unclosed interpolation"),
+        Err(err) => {
+            let err_string = err.format_with_source(source);
+            // May get "Invalid character" for bad chars and/or "Unclosed interpolation" for missing }
+            assert!(
+                err_string.to_lowercase().contains("unclosed")
+                    || err_string.to_lowercase().contains("invalid")
+                    || err_string.to_lowercase().contains("interpolation"),
+                "Error message should mention interpolation problem: {}",
+                err_string
+            );
+        }
+    }
+}
+
+#[test]
+fn test_error_empty_interpolation() {
+    let source = include_str!("fixtures/error_empty_interpolation.bobbin");
+
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for empty interpolation"),
+        Err(err) => {
+            let err_string = err.format_with_source(source);
+            assert!(
+                err_string.to_lowercase().contains("identifier")
+                    || err_string.to_lowercase().contains("expected"),
+                "Error message should mention expected identifier: {}",
+                err_string
+            );
+        }
+    }
+}
+
+#[test]
+fn test_error_lone_closing_brace() {
+    let source = include_str!("fixtures/error_lone_closing_brace.bobbin");
+
+    match Runtime::new(source) {
+        Ok(_) => panic!("Expected error for lone closing brace"),
+        Err(err) => {
+            let err_string = err.format_with_source(source);
+            assert!(
+                err_string.contains("}") || err_string.to_lowercase().contains("brace"),
+                "Error message should mention unexpected brace: {}",
+                err_string
+            );
+        }
+    }
+}

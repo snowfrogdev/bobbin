@@ -1,0 +1,6 @@
+temp item = "sword"
+What will you do with the {item}?
+- Keep the {item}
+    You kept the {item}.
+- Drop the {item}
+    You dropped the {item}.

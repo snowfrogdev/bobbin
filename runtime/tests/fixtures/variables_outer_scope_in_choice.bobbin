@@ -1,0 +1,8 @@
+temp player = "Hero"
+Welcome, {player}!
+- Enter the cave
+    {player} enters the cave.
+    It is dark inside.
+- Stay outside
+    {player} waits outside.
+The adventure continues for {player}.

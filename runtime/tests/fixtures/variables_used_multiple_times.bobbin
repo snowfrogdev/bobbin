@@ -1,0 +1,4 @@
+temp hero = "Knight"
+The {hero} enters the room.
+The {hero} draws a sword.
+Go, {hero}, go!

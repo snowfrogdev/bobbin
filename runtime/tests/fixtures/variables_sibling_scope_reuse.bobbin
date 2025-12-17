@@ -1,0 +1,8 @@
+temp player = "Hero"
+Choose wisely:
+- Path A
+    temp reward = "gold"
+    {player} gets {reward}.
+- Path B
+    temp reward = "silver"
+    {player} gets {reward}.

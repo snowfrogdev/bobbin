@@ -1,0 +1,4 @@
+temp is_open = true
+temp is_locked = false
+Door is open: {is_open}
+Door is locked: {is_locked}
