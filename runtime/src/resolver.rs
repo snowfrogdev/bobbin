@@ -46,8 +46,6 @@ impl SemanticError {
 pub struct SymbolTable {
     /// Each declaration and reference NodeId -> stack slot
     pub bindings: HashMap<NodeId, usize>,
-    /// Maximum number of slots needed (high water mark)
-    pub max_slots: usize,
 }
 
 /// Information about a declared variable
