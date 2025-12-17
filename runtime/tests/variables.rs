@@ -35,6 +35,16 @@ fn assignment() {
     support::run_output_test(&support::cases_dir().join("variables/assignment.bobbin"));
 }
 
+#[test]
+fn assignment_multiple() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_multiple.bobbin"));
+}
+
+#[test]
+fn assignment_types() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_types.bobbin"));
+}
+
 // =============================================================================
 // Type-specific Interpolation
 // =============================================================================
@@ -85,7 +95,7 @@ fn in_choices_choice_text_drop() {
 }
 
 #[test]
-fn in_choices_outer_scope_enter() {
+fn in_choices_outer_scope_enter_cave() {
     support::run_trace_test(
         &support::cases_dir().join("variables/in_choices/outer_scope.bobbin"),
         "enter_cave",
@@ -93,7 +103,7 @@ fn in_choices_outer_scope_enter() {
 }
 
 #[test]
-fn in_choices_outer_scope_stay() {
+fn in_choices_outer_scope_stay_outside() {
     support::run_trace_test(
         &support::cases_dir().join("variables/in_choices/outer_scope.bobbin"),
         "stay_outside",
@@ -117,7 +127,7 @@ fn in_choices_nested_right() {
 }
 
 #[test]
-fn in_choices_sibling_reuse_a() {
+fn in_choices_sibling_reuse_path_a() {
     support::run_trace_test(
         &support::cases_dir().join("variables/in_choices/sibling_reuse.bobbin"),
         "path_a",
@@ -125,10 +135,26 @@ fn in_choices_sibling_reuse_a() {
 }
 
 #[test]
-fn in_choices_sibling_reuse_b() {
+fn in_choices_sibling_reuse_path_b() {
     support::run_trace_test(
         &support::cases_dir().join("variables/in_choices/sibling_reuse.bobbin"),
         "path_b",
+    );
+}
+
+#[test]
+fn in_choices_outer_scope_assignment_cheer_up() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/in_choices/outer_scope_assignment.bobbin"),
+        "cheer_up",
+    );
+}
+
+#[test]
+fn in_choices_outer_scope_assignment_get_angry() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/in_choices/outer_scope_assignment.bobbin"),
+        "get_angry",
     );
 }
 
@@ -149,4 +175,14 @@ fn errors_shadowing() {
 #[test]
 fn errors_redeclaration() {
     support::run_error_test(&support::cases_dir().join("variables/errors/redeclaration.bobbin"));
+}
+
+#[test]
+fn errors_assignment_undefined() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/assignment_undefined.bobbin"));
+}
+
+#[test]
+fn errors_assignment_typo() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/assignment_typo.bobbin"));
 }
