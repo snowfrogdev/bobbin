@@ -12,6 +12,8 @@
 --- path: select_second
 > What's your name?
 [advance]
+! waiting_for_choice
+? Alice | Bob
 [choice 1]
 > Nice to meet you!
 ! done
