@@ -69,12 +69,10 @@ pub fn run_output_test(case_path: &Path) {
     let expected_lines: Vec<&str> = expected.lines().collect();
     let mut actual_lines = Vec::new();
 
-    // Collect all output lines
+    // Collect all output lines (including empty lines to catch unexpected gaps)
     loop {
         let line = runtime.current_line();
-        if !line.is_empty() || actual_lines.is_empty() {
-            actual_lines.push(line.to_string());
-        }
+        actual_lines.push(line.to_string());
         if !runtime.has_more() {
             break;
         }
@@ -193,7 +191,8 @@ pub fn parse_trace(content: &str) -> Vec<TracePath> {
     let mut paths = Vec::new();
     let mut current_path: Option<TracePath> = None;
 
-    for line in content.lines() {
+    for (line_num, line) in content.lines().enumerate() {
+        let line_num = line_num + 1; // 1-indexed for human readability
         let line = line.trim();
 
         // Skip empty lines and comments
@@ -220,7 +219,9 @@ pub fn parse_trace(content: &str) -> Vec<TracePath> {
         }
 
         // Must be inside a path
-        let path = current_path.as_mut().expect("Step outside of path block");
+        let path = current_path
+            .as_mut()
+            .unwrap_or_else(|| panic!("Line {}: Step outside of path block: {}", line_num, line));
 
         // Strip inline comments
         let line = if let Some(idx) = line.find("  #") {
@@ -230,7 +231,7 @@ pub fn parse_trace(content: &str) -> Vec<TracePath> {
         };
 
         // Parse the step
-        if let Some(step) = parse_step(line) {
+        if let Some(step) = parse_step(line, line_num) {
             path.steps.push(step);
         }
     }
@@ -243,7 +244,7 @@ pub fn parse_trace(content: &str) -> Vec<TracePath> {
     paths
 }
 
-fn parse_step(line: &str) -> Option<Step> {
+fn parse_step(line: &str, line_num: usize) -> Option<Step> {
     // Line assertion: > text
     if let Some(text) = line.strip_prefix("> ") {
         return Some(Step::Assert(Assertion::Line(text.to_string())));
@@ -268,27 +269,25 @@ fn parse_step(line: &str) -> Option<Step> {
             "done" => Some(Step::Assert(Assertion::Done)),
             "has_more" => Some(Step::Assert(Assertion::HasMore)),
             "waiting_for_choice" => Some(Step::Assert(Assertion::WaitingForChoice)),
-            _ => panic!("Unknown state assertion: {}", state),
+            _ => panic!("Line {}: Unknown state assertion: {}", line_num, state),
         };
     }
 
     // Actions: [advance], [choice N]
-    if line.starts_with('[') && line.ends_with(']') {
-        let inner = &line[1..line.len() - 1];
+    if let Some(inner) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
         if inner == "advance" {
             return Some(Step::Action(Action::Advance));
         }
         if let Some(idx_str) = inner.strip_prefix("choice ") {
-            let idx: usize = idx_str
-                .trim()
-                .parse()
-                .unwrap_or_else(|_| panic!("Invalid choice index: {}", idx_str));
+            let idx: usize = idx_str.trim().parse().unwrap_or_else(|_| {
+                panic!("Line {}: Invalid choice index: {}", line_num, idx_str)
+            });
             return Some(Step::Action(Action::SelectChoice(idx)));
         }
-        panic!("Unknown action: {}", inner);
+        panic!("Line {}: Unknown action: {}", line_num, inner);
     }
 
-    panic!("Unparseable trace line: {}", line);
+    panic!("Line {}: Unparseable trace line: {}", line_num, line);
 }
 
 // =============================================================================
