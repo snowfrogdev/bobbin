@@ -1,5 +1,6 @@
 use crate::chunk::{Chunk, Instruction, Value};
 use crate::storage::{HostState, VariableStorage};
+use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum RuntimeError {
@@ -55,15 +56,15 @@ pub(crate) enum StepResult {
     Done,
 }
 
-pub struct VM<'ctx> {
+pub struct VM {
     chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
-    storage: &'ctx dyn VariableStorage,
-    host: &'ctx dyn HostState,
+    storage: Arc<dyn VariableStorage>,
+    host: Arc<dyn HostState>,
 }
 
-impl std::fmt::Debug for VM<'_> {
+impl std::fmt::Debug for VM {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("VM")
             .field("chunk", &self.chunk)
@@ -73,11 +74,11 @@ impl std::fmt::Debug for VM<'_> {
     }
 }
 
-impl<'ctx> VM<'ctx> {
+impl VM {
     pub fn new(
         chunk: Chunk,
-        storage: &'ctx dyn VariableStorage,
-        host: &'ctx dyn HostState,
+        storage: Arc<dyn VariableStorage>,
+        host: Arc<dyn HostState>,
     ) -> Self {
         Self {
             chunk,

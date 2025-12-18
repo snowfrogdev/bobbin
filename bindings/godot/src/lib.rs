@@ -1,4 +1,4 @@
-use bobbin_runtime::Runtime;
+use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
 use godot::classes::{
     Engine, FileAccess, IResourceFormatLoader, IResourceFormatSaver, IScriptExtension,
     IScriptLanguageExtension, Resource, ResourceFormatLoader, ResourceFormatSaver, ResourceLoader,
@@ -7,8 +7,129 @@ use godot::classes::{
 };
 use godot::meta::RawPtr;
 use godot::prelude::*;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 struct BobbinExtension;
+
+// =============================================================================
+// Storage and Host State Implementations
+// =============================================================================
+
+/// In-memory implementation of VariableStorage for Godot.
+/// Thread-safe via RwLock.
+struct MemoryStorage {
+    values: RwLock<HashMap<String, Value>>,
+}
+
+impl MemoryStorage {
+    fn new() -> Self {
+        Self {
+            values: RwLock::new(HashMap::new()),
+        }
+    }
+
+    /// Get all variables as a copy of the internal map.
+    fn get_all(&self) -> HashMap<String, Value> {
+        self.values.read().unwrap().clone()
+    }
+}
+
+impl VariableStorage for MemoryStorage {
+    fn get(&self, name: &str) -> Option<Value> {
+        self.values.read().unwrap().get(name).cloned()
+    }
+
+    fn set(&self, name: &str, value: Value) {
+        self.values.write().unwrap().insert(name.to_string(), value);
+    }
+
+    fn initialize_if_absent(&self, name: &str, default: Value) {
+        self.values
+            .write()
+            .unwrap()
+            .entry(name.to_string())
+            .or_insert(default);
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        self.values.read().unwrap().contains_key(name)
+    }
+}
+
+/// Host state implementation backed by a HashMap.
+/// Thread-safe via RwLock. Game can update values at any time.
+struct DictionaryHostState {
+    values: RwLock<HashMap<String, Value>>,
+}
+
+impl DictionaryHostState {
+    fn from_dictionary(dict: &Dictionary) -> Self {
+        let mut values = HashMap::new();
+        for key in dict.keys_array().iter_shared() {
+            if let Ok(name) = key.try_to::<GString>() {
+                if let Some(val) = dict.get(key.clone()) {
+                    if let Some(value) = variant_to_value(&val) {
+                        values.insert(name.to_string(), value);
+                    }
+                }
+            }
+        }
+        Self {
+            values: RwLock::new(values),
+        }
+    }
+
+    /// Update a host variable (called by game).
+    fn update(&self, name: &str, value: Value) {
+        self.values.write().unwrap().insert(name.to_string(), value);
+    }
+}
+
+impl HostState for DictionaryHostState {
+    fn lookup(&self, name: &str) -> Option<Value> {
+        self.values.read().unwrap().get(name).cloned()
+    }
+}
+
+/// Empty host state that provides no variables.
+struct EmptyHostState;
+
+impl HostState for EmptyHostState {
+    fn lookup(&self, _name: &str) -> Option<Value> {
+        None
+    }
+}
+
+// =============================================================================
+// Value Conversion Helpers
+// =============================================================================
+
+/// Convert Godot Variant to Bobbin Value.
+fn variant_to_value(v: &Variant) -> Option<Value> {
+    match v.get_type() {
+        VariantType::STRING => Some(Value::String(v.to::<GString>().to_string())),
+        VariantType::INT => Some(Value::Number(v.to::<i64>() as f64)),
+        VariantType::FLOAT => Some(Value::Number(v.to::<f64>())),
+        VariantType::BOOL => Some(Value::Bool(v.to::<bool>())),
+        _ => None,
+    }
+}
+
+/// Convert Bobbin Value to Godot Variant.
+fn value_to_variant(v: &Value) -> Variant {
+    match v {
+        Value::String(s) => Variant::from(GString::from(s.as_str())),
+        Value::Number(n) => {
+            if n.fract() == 0.0 {
+                Variant::from(*n as i64)
+            } else {
+                Variant::from(*n)
+            }
+        }
+        Value::Bool(b) => Variant::from(*b),
+    }
+}
 
 /// Find the registered Bobbin language by iterating through Engine's script languages
 fn find_bobbin_language() -> Option<Gd<ScriptLanguage>> {
@@ -640,20 +761,38 @@ impl IResourceFormatSaver for BobbinSaver {
 #[class(base=RefCounted, no_init)]
 pub struct BobbinRuntime {
     base: Base<RefCounted>,
+    storage: Arc<MemoryStorage>,
+    host: Arc<DictionaryHostState>,
     inner: Runtime,
 }
 
 #[godot_api]
 impl BobbinRuntime {
+    /// Create runtime from script content without host state.
     #[func]
     fn from_string(content: GString) -> Option<Gd<Self>> {
-        match Runtime::new(&content.to_string()) {
+        // Use empty host state (no extern variables)
+        Self::from_string_with_host(content, Dictionary::new())
+    }
+
+    /// Create runtime with host state Dictionary.
+    #[func]
+    fn from_string_with_host(content: GString, host_state: Dictionary) -> Option<Gd<Self>> {
+        let storage = Arc::new(MemoryStorage::new());
+        let host = Arc::new(DictionaryHostState::from_dictionary(&host_state));
+
+        let storage_dyn: Arc<dyn VariableStorage> = storage.clone();
+        let host_dyn: Arc<dyn HostState> = host.clone();
+
+        match Runtime::new(&content.to_string(), storage_dyn, host_dyn) {
             Ok(runtime) => Some(Gd::from_init_fn(|base| Self {
                 base,
+                storage,
+                host,
                 inner: runtime,
             })),
             Err(e) => {
-                godot_error!("Failed to load bobbin script: {:?}", e);
+                godot_error!("Failed to create runtime:\n{}", e.format_with_source(&content.to_string()));
                 None
             }
         }
@@ -661,7 +800,9 @@ impl BobbinRuntime {
 
     #[func]
     fn advance(&mut self) {
-        self.inner.advance();
+        if let Err(e) = self.inner.advance() {
+            godot_error!("advance failed: {}", e);
+        }
     }
 
     #[func]
@@ -693,6 +834,41 @@ impl BobbinRuntime {
     fn select_choice(&mut self, index: i32) {
         if let Err(e) = self.inner.select_choice(index as usize) {
             godot_error!("select_choice failed: {}", e);
+        }
+    }
+
+    /// Get a save variable value.
+    #[func]
+    fn get_variable(&self, name: GString) -> Variant {
+        match self.storage.get(&name.to_string()) {
+            Some(value) => value_to_variant(&value),
+            None => Variant::nil(),
+        }
+    }
+
+    /// Set a save variable value.
+    #[func]
+    fn set_variable(&self, name: GString, value: Variant) {
+        if let Some(val) = variant_to_value(&value) {
+            self.storage.set(&name.to_string(), val);
+        }
+    }
+
+    /// Get all save variables as Dictionary.
+    #[func]
+    fn get_all_variables(&self) -> Dictionary {
+        let mut dict = Dictionary::new();
+        for (key, value) in self.storage.get_all() {
+            dict.set(GString::from(key.as_str()), value_to_variant(&value));
+        }
+        dict
+    }
+
+    /// Update a host variable (game state changed).
+    #[func]
+    fn update_host_variable(&self, name: GString, value: Variant) {
+        if let Some(val) = variant_to_value(&value) {
+            self.host.update(&name.to_string(), val);
         }
     }
 }

@@ -2,7 +2,8 @@
 
 mod support;
 
-use bobbin_runtime::Runtime;
+use bobbin_runtime::{HostState, Runtime, VariableStorage};
+use std::sync::Arc;
 use support::{EmptyHostState, MemoryStorage};
 
 #[test]
@@ -18,9 +19,9 @@ fn empty_lines() {
 #[test]
 fn empty_source() {
     // Special case: empty source produces empty output
-    let storage = MemoryStorage::new();
-    let host = EmptyHostState;
-    let runtime = Runtime::new("", &storage, &host).unwrap();
+    let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
+    let host: Arc<dyn HostState> = Arc::new(EmptyHostState);
+    let runtime = Runtime::new("", storage, host).unwrap();
     assert_eq!(runtime.current_line(), "");
     assert!(!runtime.has_more());
 }

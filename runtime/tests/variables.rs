@@ -161,16 +161,17 @@ fn extern_mixed_with_temp_and_save() {
 fn extern_missing_at_runtime() {
     // Test that using a declared extern variable that the host doesn't provide
     // results in a runtime error (MissingExternVariable)
-    use bobbin_runtime::{RuntimeError, Runtime};
+    use bobbin_runtime::{HostState, RuntimeError, Runtime, VariableStorage};
+    use std::sync::Arc;
     use support::{EmptyHostState, MemoryStorage};
 
     let source = "extern player_health\n\nYou have {player_health} HP.\n";
 
-    let storage = MemoryStorage::new();
-    let host = EmptyHostState; // Doesn't provide player_health
+    let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
+    let host: Arc<dyn HostState> = Arc::new(EmptyHostState); // Doesn't provide player_health
 
     // Runtime::new steps on creation, which will try to interpolate the extern variable
-    let result = Runtime::new(source, &storage, &host);
+    let result = Runtime::new(source, storage, host);
 
     // Should fail with MissingExternVariable since EmptyHostState doesn't provide it
     match result {
