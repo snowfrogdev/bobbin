@@ -1,0 +1,3 @@
+extern player_health
+
+You have {player_health} HP.

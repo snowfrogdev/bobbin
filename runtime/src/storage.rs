@@ -1,4 +1,4 @@
-//! Variable storage interface for dialogue globals.
+//! Variable storage interfaces for dialogue globals and host state.
 
 use std::collections::HashMap;
 
@@ -63,5 +63,55 @@ impl VariableStorage for MemoryStorage {
 
     fn contains(&self, name: &str) -> bool {
         self.values.contains_key(name)
+    }
+}
+
+/// Interface for host-provided variables (read-only from Bobbin's perspective).
+///
+/// The host application implements this trait to expose variables like
+/// player health, gold, or other game state to dialogue scripts.
+///
+/// Variables accessed through this interface are declared with `extern`
+/// in Bobbin scripts. They are read-only from the dialogue's perspective;
+/// attempting to use `set` on an extern variable is a compile-time error.
+///
+/// # Example
+///
+/// ```rust
+/// use bobbin_runtime::{HostState, Value};
+///
+/// struct GameState {
+///     player_health: i64,
+///     gold: i64,
+/// }
+///
+/// impl HostState for GameState {
+///     fn lookup(&self, name: &str) -> Option<Value> {
+///         match name {
+///             "player_health" => Some(Value::Number(self.player_health as f64)),
+///             "gold" => Some(Value::Number(self.gold as f64)),
+///             _ => None,
+///         }
+///     }
+/// }
+/// ```
+pub trait HostState {
+    /// Look up a host variable by name.
+    ///
+    /// Returns `Some(value)` if the variable exists, `None` otherwise.
+    /// A `None` return will cause `RuntimeError::MissingExternVariable` at runtime.
+    fn lookup(&self, name: &str) -> Option<Value>;
+}
+
+/// Empty host state that provides no variables.
+///
+/// This is the default implementation used when no host state is provided.
+/// All lookups return `None`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct EmptyHostState;
+
+impl HostState for EmptyHostState {
+    fn lookup(&self, _name: &str) -> Option<Value> {
+        None
     }
 }

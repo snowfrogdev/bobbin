@@ -39,21 +39,53 @@ Type checking varies by variable category:
 |----------|---------|--------|----------|
 | Temporaries | `temp` | Static | Compile-time |
 | Dialogue globals | `save` | Static | Compile-time + runtime verification |
-| Game variables | (none) | Dynamic | Runtime only |
+| Host variables | `extern` | Dynamic | Runtime only |
 
 **Temporary variables** (`temp`) are fully statically typed. The compiler infers the type from the initial value and catches type mismatches at compile time.
 
 **Dialogue globals** (`save`) have static typing with runtime verification. The declared type is checked at compile time, and the runtime verifies that values retrieved from storage match the expected type. If the storage returns a value of the wrong type, that's a runtime error.
 
-**Game variables** are dynamically typed. Since the game provides these values at runtime, Bobbin cannot know their types until lookup. Type mismatches in expressions are runtime errors.
+**Host variables** (`extern`) are dynamically typed. Since the host provides these values at runtime, Bobbin cannot know their types until lookup. Type mismatches in expressions are runtime errors.
 
 **Rationale**:
 - Static typing for `temp` and `save` catches most errors at compile time
 - Runtime verification at the storage boundary handles the reality that storage is external
-- Dynamic typing for game variables is necessary since types are unknown until runtime
+- Dynamic typing for host variables is necessary since types are unknown until runtime
 - This balance maximizes error detection while remaining practical
 
 See ADR-0004 for the full architecture.
+
+### Host Variable Declaration (`extern`)
+
+**Decision**: Use `extern` keyword to declare host-provided variables.
+
+Bobbin scripts must explicitly declare which variables they expect from the host:
+
+```bobbin
+extern player_health
+extern gold
+extern player_name
+
+Welcome, {player_name}! You have {player_health} HP and {gold} gold.
+```
+
+**Semantics:**
+
+- Declares a variable exists but is provided by host, not dialogue
+- No initial value (host owns the value)
+- Read-only: attempting `set player_health = 100` is a semantic error
+- Must be declared before use
+- Duplicate declarations in same file are errors; across files are OK (idempotent)
+- If host doesn't provide the variable at runtime, `RuntimeError::MissingExternVariable`
+
+**Rationale:**
+
+- Self-documenting: scripts explicitly list their host dependencies
+- Compile-time validation: typos caught early (`{playr_health}` → error if not declared)
+- Tooling support: IDEs can autocomplete declared variables
+- Prelude-compatible: common externs can go in `globals.bobbin`
+
+See ADR-0004 for the two-interface architecture.
 
 ### Global Initialization Semantics
 
@@ -77,22 +109,30 @@ It checks if `merchant_relationship` already exists in storage:
 
 The prelude system:
 1. If `globals.bobbin` exists in the project, load it first
-2. Its `save` declarations become available in all other dialogue files
+2. Its `save` and `extern` declarations become available in all other dialogue files
 3. No explicit import syntax required
 
 **Rationale**: Enables shared state across files without exposing module system complexity. The infrastructure supports a future explicit `import` statement.
 
 ### Name Collision Handling
 
-**Decision**: Dialogue global with same name as game variable = compile error.
+**Decision**: Shadowing between variable categories is a semantic error.
 
-If the game provides a variable called `gold`, and a dialogue file declares:
+If a dialogue file declares conflicting variables:
 
+```bobbin
+extern gold
+save gold = 100    # Semantic error: shadows extern
 ```
+
+Or:
+
+```bobbin
 save gold = 100
+extern gold        # Semantic error: shadows save
 ```
 
-This produces a compile error: "Cannot declare 'gold': name conflicts with game variable."
+This produces a semantic error caught by the resolver. Duplicate `extern` declarations in the same file are errors; across files they are allowed (idempotent).
 
 **Rationale**: Silent shadowing would cause confusion. Explicit errors make the conflict visible.
 
@@ -203,6 +243,7 @@ When implementing, the scanner should recognize these line prefixes:
 |--------|-------|---------|
 | `save ` | SAVE | `save x = 0` |
 | `temp ` | TEMP | `temp y = 0` |
+| `extern ` | EXTERN | `extern player_health` |
 | `set ` | SET | `set x = 1` |
 | `- ` | CHOICE | `- Option text` |
 | (other) | LINE | `Dialogue text` |
@@ -237,11 +278,11 @@ pub trait VariableStorage {
 }
 ```
 
-### GameState Interface (Game Variables)
+### HostState Interface (Host Variables)
 
 ```rust
-pub trait GameState {
-    /// Look up a game variable (read-only from Bobbin's perspective)
+pub trait HostState {
+    /// Look up a host variable (read-only from Bobbin's perspective)
     fn lookup(&self, name: &str) -> Option<Value>;
 }
 ```

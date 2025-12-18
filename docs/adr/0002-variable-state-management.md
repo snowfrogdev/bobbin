@@ -52,33 +52,33 @@ How should Bobbin manage state across dialogue execution, game integration, and 
 
 ## Decision Outcome
 
-Chosen option: **Three-tier variable model with dynamic typing and game-owned persistence**
+Chosen option: **Three-tier variable model with dynamic typing and host-owned persistence**
 
 ### The Three Tiers
 
 | Tier | Keyword | Declared By | Persisted By | Example |
 |------|---------|-------------|--------------|---------|
-| Game variables | (none) | Game code | Game | `gold`, `player_health` |
-| Dialogue globals | `save` | Dialogue file | Game | `save merchant_relationship = 0` |
+| Host variables | `extern` | Dialogue file | Host | `extern player_health` |
+| Dialogue globals | `save` | Dialogue file | Host | `save merchant_relationship = 0` |
 | Temporaries | `temp` | Dialogue file | Not persisted | `temp loop_counter = 0` |
 
 ### Persistence Architecture
 
-The game provides an opaque key-value storage interface. Bobbin treats it as a black box:
+The host provides two interfaces. Bobbin treats them as opaque:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                      Game (Host)                        │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │              VariableStorage                     │  │
-│  │  - Stores game variables + dialogue globals      │  │
-│  │  - Handles serialization (game's save system)    │  │
-│  │  - Provides get/set interface to Bobbin          │  │
-│  └──────────────────────────────────────────────────┘  │
+│                     Host Application                    │
+│  ┌────────────────────────┐  ┌──────────────────────┐  │
+│  │   VariableStorage      │  │     HostState        │  │
+│  │   (dialogue globals)   │  │  (host variables)    │  │
+│  │   - read/write         │  │  - read-only         │  │
+│  │   - host serializes    │  │  - host owns         │  │
+│  └────────────────────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────┘
-                           │
-                           │ get() / set()
-                           ▼
+                    │                      │
+                    │ get/set/init         │ lookup
+                    ▼                      ▼
 ┌─────────────────────────────────────────────────────────┐
 │                    Bobbin Runtime                       │
 │  ┌────────────────────┐  ┌────────────────────────┐    │
@@ -88,16 +88,21 @@ The game provides an opaque key-value storage interface. Bobbin treats it as a b
 └─────────────────────────────────────────────────────────┘
 ```
 
+See ADR-0004 for details on the two-interface architecture.
+
 ### Prelude System for Cross-File Globals
 
-A `globals.bobbin` file (if present) is automatically loaded before other dialogue files. Its `save` declarations become available in all files:
+A `globals.bobbin` file (if present) is automatically loaded before other dialogue files. Its `save` and `extern` declarations become available in all files:
 
-```
+```bobbin
 # globals.bobbin
+extern player_health
+extern gold
 save merchant_relationship = 0
 save quest_main_progress = "not_started"
 
-# shop.bobbin (can use merchant_relationship without declaring it)
+# shop.bobbin (can use these without re-declaring)
+You have {gold} gold and {player_health} HP.
 set merchant_relationship = 10
 ```
 
@@ -155,7 +160,11 @@ This prevents save games from resetting progress when dialogue files are loaded.
 
 ### Name Collision Handling
 
-If a dialogue file declares `save gold = 0` but the game already provides a `gold` variable, this is a compile error. Dialogue globals cannot shadow game variables.
+Shadowing between variable categories is a semantic error caught by the resolver:
+
+- If a dialogue file declares `save gold = 0` but also has `extern gold`, this is a semantic error
+- If a dialogue file declares `temp health = 100` but also has `extern health`, this is a semantic error
+- Duplicate `extern` declarations in the same file are errors; across files they are allowed (idempotent)
 
 ### Visit Tracking
 

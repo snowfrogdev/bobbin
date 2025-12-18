@@ -1,0 +1,4 @@
+--- path: basic
+[host player_health = 100]
+> You have 100 HP.
+! done

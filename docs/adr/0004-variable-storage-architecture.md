@@ -8,9 +8,9 @@ deciders: Phil
 
 ## Context and Problem Statement
 
-ADR-0002 established a three-tier variable model (game variables, dialogue globals, temporaries) and specified that the game provides a `VariableStorage` interface. However, it left open important questions:
+ADR-0002 established a three-tier variable model (host variables, dialogue globals, temporaries) and specified that the host provides a `VariableStorage` interface. However, it left open important questions:
 
-1. **Read/write patterns**: Should dialogue be able to write to game variables, or only read them?
+1. **Read/write patterns**: Should dialogue be able to write to host variables, or only read them?
 2. **Interface design**: Is one interface sufficient, or should different variable categories use different interfaces?
 3. **Type system**: How should types be enforced across the storage boundary?
 
@@ -19,15 +19,15 @@ These questions arise because different use cases have different requirements:
 | Use Case | Example | Read/Write Pattern |
 |----------|---------|-------------------|
 | Dialogue-declared, dialogue-read | `save visited_tavern = false` then `{visited_tavern}` | Bobbin owns entirely |
-| Dialogue-declared, game-read | Quest progress the game checks | Bobbin writes, game reads |
-| Game-declared, dialogue-read | `{player_health}`, `{gold}` | Game owns, Bobbin reads |
-| Game-declared, dialogue-write | `set gold = gold + 100` | Problematic - bypasses game logic |
+| Dialogue-declared, host-read | Quest progress the host checks | Bobbin writes, host reads |
+| Host-declared, dialogue-read | `extern player_health` then `{player_health}` | Host owns, Bobbin reads |
+| Host-declared, dialogue-write | `set gold = gold + 100` | Semantic error - extern is read-only |
 
 ## Decision Drivers
 
 - **Clear ownership**: Each variable should have one authoritative owner
 - **Type safety**: Catch errors early where possible, but handle cross-boundary realities
-- **Game control**: Games must not lose control of their own state
+- **Host control**: Hosts must not lose control of their own state
 - **Writer productivity**: Dialogue authors shouldn't need programmer help for dialogue-only state
 - **Cross-engine compatibility**: Works with Godot, Unity, and other hosts
 
@@ -36,7 +36,7 @@ These questions arise because different use cases have different requirements:
 ### Interface Design
 
 1. **Single interface**: One `VariableStorage` for all persistent state
-2. **Two interfaces**: Separate `VariableStorage` (dialogue-owned) and `GameState` (game-owned, read-only)
+2. **Two interfaces**: Separate `VariableStorage` (dialogue-owned) and `HostState` (host-owned, read-only)
 3. **Three interfaces**: Add a third for commands/events
 
 ### Type System
@@ -55,12 +55,12 @@ Chosen options:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Game (Host)                            │
+│                        Host Application                     │
 │  ┌────────────────────────┐  ┌────────────────────────┐    │
-│  │   VariableStorage      │  │      GameState         │    │
-│  │   (dialogue globals)   │  │   (game variables)     │    │
+│  │   VariableStorage      │  │      HostState         │    │
+│  │   (dialogue globals)   │  │   (host variables)     │    │
 │  │   - read/write         │  │   - read-only          │    │
-│  │   - game serializes    │  │   - game owns entirely │    │
+│  │   - host serializes    │  │   - host owns entirely │    │
 │  └────────────────────────┘  └────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
                     │                        │
@@ -98,18 +98,20 @@ Used for:
 - `set` modifications to dialogue globals
 - Reading dialogue globals via interpolation
 
-#### GameState Interface (Game Variables)
+#### HostState Interface (Host Variables)
 
 ```rust
-pub trait GameState {
-    /// Look up a game variable (read-only from Bobbin's perspective)
+pub trait HostState {
+    /// Look up a host variable (read-only from Bobbin's perspective)
     fn lookup(&self, name: &str) -> Option<Value>;
 }
 ```
 
 Used for:
-- Reading game variables like `{player_health}`, `{gold}`
-- Condition checks involving game state
+- Reading host variables like `{player_health}`, `{gold}` (declared via `extern`)
+- Condition checks involving host state
+
+Host variables are read-only from Bobbin's perspective. Attempting to use `set` on an extern variable is a semantic error caught at compile time by the resolver.
 
 ### Type System
 
@@ -117,7 +119,7 @@ Used for:
 |----------|---------|--------|----------|-----------|
 | Temporaries | `temp` | Static | Compile-time | Stack-only, never crosses boundaries |
 | Dialogue globals | `save` | Static | Compile + runtime | Declared type is expected; storage verified |
-| Game variables | (none) | Dynamic | Runtime | Type unknown until lookup |
+| Host variables | `extern` | Dynamic | Runtime | Type unknown until lookup |
 
 #### Temporary Variables (`temp`)
 
@@ -144,45 +146,50 @@ set reputation = "bad"  # Compile error: expected int
 # If storage contains corrupted data (e.g., string), runtime error occurs
 ```
 
-The trust boundary is at the `VariableStorage` interface. If the game's storage implementation returns a value of the wrong type, that's a runtime error - but this should be rare in practice since Bobbin controls what gets written.
+The trust boundary is at the `VariableStorage` interface. If the host's storage implementation returns a value of the wrong type, that's a runtime error - but this should be rare in practice since Bobbin controls what gets written.
 
-#### Game Variables
+#### Host Variables (`extern`)
 
-Fully dynamic typing. The game can provide any type, and Bobbin discovers it at runtime.
+Fully dynamic typing. The host can provide any type, and Bobbin discovers it at runtime.
 
-```
+```bobbin
+extern player_health
+
 # player_health could be int, float, or even string
-# Bobbin discovers the type when it calls GameState::lookup()
+# Bobbin discovers the type when it calls HostState::lookup()
 You have {player_health} HP.
 ```
 
-Type mismatches in expressions involving game variables are runtime errors.
+The `extern` keyword declares that a variable is provided by the host application. It must be declared before use. Type mismatches in expressions involving host variables are runtime errors.
 
-### Dialogue-to-Game Effects
+If the host doesn't provide a declared extern variable at runtime, `RuntimeError::MissingExternVariable` is raised.
 
-For cases where dialogue should affect game state (giving items, triggering events), the recommended pattern is **commands/events** rather than direct writes:
+### Dialogue-to-Host Effects
 
-```
+For cases where dialogue should affect host state (giving items, triggering events), the recommended pattern is **commands/events** rather than direct writes:
+
+```bobbin
 # Instead of:
-set gold = gold + 100        # Bypasses game's economy logic
+set gold = gold + 100        # Would bypass host's economy logic (and is a semantic error for extern)
 
 # Use commands (syntax TBD):
-give_gold(100)               # Game implements the command
+give_gold(100)               # Host implements the command
 trigger_event("quest_complete")
 ```
 
-Commands ensure the game maintains control of its state while allowing dialogue to request effects. The exact syntax is deferred to a future ADR.
+Commands ensure the host maintains control of its state while allowing dialogue to request effects. The exact syntax is deferred to a future ADR.
 
 ### Consequences
 
-- Good, because ownership is clear: dialogue owns `save` variables, game owns game variables
-- Good, because the game cannot accidentally have its state corrupted by dialogue
+- Good, because ownership is clear: dialogue owns `save` variables, host owns `extern` variables
+- Good, because the host cannot accidentally have its state corrupted by dialogue (extern is read-only)
 - Good, because static typing catches most errors at compile time
 - Good, because writers get full autonomy over dialogue state
 - Good, because the runtime can give clear error messages for type mismatches
+- Good, because `extern` declarations make host dependencies explicit and self-documenting
 - Bad, because two interfaces require slightly more integration work than one
 - Bad, because runtime type verification adds overhead (minimal in practice)
-- Neutral, because commands for game effects require a future design decision
+- Neutral, because commands for host effects require a future design decision
 
 ## Pros and Cons of the Options
 
@@ -190,7 +197,7 @@ Commands ensure the game maintains control of its state while allowing dialogue 
 
 - Good, because simpler integration (one interface)
 - Bad, because conflates ownership (who controls what?)
-- Bad, because dialogue could write to game variables, bypassing game logic
+- Bad, because dialogue could write to host variables, bypassing host logic
 - Bad, because type safety is harder without clear ownership
 
 ### Fully Dynamic Typing (Option 4)
@@ -205,7 +212,7 @@ Commands ensure the game maintains control of its state while allowing dialogue 
 
 - Good, because all errors caught at compile time
 - Good, because enables rich IDE support
-- Bad, because game variables have unknown types until runtime
+- Bad, because host variables have unknown types until runtime
 - Bad, because requires type annotations that add verbosity
 - Bad, because cross-language type mapping (GDScript, C#, Rust) is complex
 
@@ -217,9 +224,9 @@ When looking up a variable, the resolver checks in order:
 
 1. **Local scope**: `temp` variables in current and enclosing scopes
 2. **Dialogue globals**: `save` variables from current file and prelude
-3. **Game state**: Variables provided by `GameState`
+3. **Host state**: Variables declared with `extern` (provided by `HostState` at runtime)
 
-This order ensures local variables shadow globals, and dialogue globals shadow game variables (though shadowing game variables is a compile warning).
+This order ensures local variables shadow globals. Shadowing between categories (`temp`/`save`/`extern`) is a semantic error caught by the resolver.
 
 ### Default Initialization Semantics
 
@@ -239,4 +246,4 @@ This prevents save games from resetting progress when dialogue files reload.
 
 - ADR-0002: Variable and State Management (establishes the three-tier model)
 - ADR-0003: Variable Modification Syntax (covers `set` keyword)
-- Future ADR: Command syntax for dialogue-to-game effects
+- Future ADR: Command syntax for dialogue-to-host effects

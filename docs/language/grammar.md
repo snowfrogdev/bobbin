@@ -3,14 +3,15 @@
 ## Syntax Grammar
 
 ```ebnf
-script     = { statement } ;
-statement  = save_decl | temp_decl | assignment | line | choice_set ;
-save_decl  = SAVE , NEWLINE ;
-temp_decl  = TEMP , NEWLINE ;
-assignment = SET , NEWLINE ;
-line       = LINE , NEWLINE ;
-choice_set = choice , { choice } ;
-choice     = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
+script      = { statement } ;
+statement   = save_decl | temp_decl | extern_decl | assignment | line | choice_set ;
+save_decl   = SAVE , NEWLINE ;
+temp_decl   = TEMP , NEWLINE ;
+extern_decl = EXTERN , NEWLINE ;
+assignment  = SET , NEWLINE ;
+line        = LINE , NEWLINE ;
+choice_set  = choice , { choice } ;
+choice      = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
 ```
 
 ## Lexical Grammar
@@ -18,8 +19,9 @@ choice     = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
 ```ebnf
 SAVE    = "save" , " " , identifier , " " , "=" , " " , literal ;
 TEMP    = "temp" , " " , identifier , " " , "=" , " " , literal ;
+EXTERN  = "extern" , " " , identifier ;
 SET     = "set" , " " , identifier , " " , "=" , " " , literal ;
-LINE    = text ;                         (* line not starting with "- ", "save ", "temp ", or "set " *)
+LINE    = text ;                         (* line not starting with "- ", "save ", "temp ", "extern ", or "set " *)
 CHOICE  = "-" , " " , text ;             (* line starting with "- " *)
 NEWLINE = "\n" | "\r\n" | "\r" ;
 INDENT  = ? increase in indentation level ? ;
@@ -50,7 +52,7 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - Statements execute sequentially; nested statements complete before their parent continues
 - Statements are recursive: choices can contain any statements, including other choice sets
 
-### Variable Declarations
+### Variable Declarations (`save` and `temp`)
 
 - `save` declares a persistent dialogue global (survives save/load)
 - `temp` declares a temporary variable (exists only during execution)
@@ -61,26 +63,29 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - See ADR-0002 for the state management architecture
 - See ADR-0004 for the type system and storage architecture
 
+### Host Variable Declarations (`extern`)
+
+- `extern` declares that a variable is provided by the host application
+- No initial value: the host owns and provides the value at runtime
+- Read-only from Bobbin's perspective; `set` on extern variables is a semantic error
+- Must be declared at top level, before first use
+- Dynamically typed: the type is discovered at runtime when the host provides the value
+- Duplicate declarations in the same file are errors; across files they are allowed (idempotent)
+- If the host doesn't provide a declared extern variable at runtime, a runtime error occurs
+- See ADR-0004 for the two-interface architecture
+
 ### Assignments
 
 - `set` modifies an existing variable
-- The variable must be declared (`save` or `temp`) or provided by the game
+- The variable must be declared with `save` or `temp`
 - Assigning to `temp` or `save` variables is type-checked at compile time
-- Assigning to game variables is not currently supported (use commands instead)
+- Assigning to `extern` variables is a semantic error (they are read-only)
 - See ADR-0003 for the syntax decision rationale
-
-### Game Variables
-
-- Game variables are provided by the host engine via the `GameState` interface
-- They are read-only from Bobbin's perspective
-- They are dynamically typed (type discovered at runtime)
-- No declaration syntax; they're accessed by name in interpolations and expressions
-- See ADR-0004 for the two-interface architecture
 
 ### Choices
 
 - Space required after `-` for choices (i.e., the `"-␣"` prefix)
-- A LINE is any line not starting with `"-␣"`, `"save "`, `"temp "`, or `"set "`
+- A LINE is any line not starting with `"-␣"`, `"save "`, `"temp "`, `"extern "`, or `"set "`
 - A CHOICE is any line starting with `"-␣"`, with the text after the prefix as its content
 
 ### Indentation

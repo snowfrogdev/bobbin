@@ -8,7 +8,7 @@ use crate::vm::{StepResult, VM};
 
 pub use crate::vm::RuntimeError;
 pub use crate::chunk::Value;
-pub use crate::storage::{MemoryStorage, VariableStorage};
+pub use crate::storage::{EmptyHostState, HostState, MemoryStorage, VariableStorage};
 
 mod ast;
 mod chunk;
@@ -94,6 +94,7 @@ impl BobbinError {
 pub struct Runtime {
     vm: VM,
     storage: Box<dyn VariableStorage>,
+    host_state: Box<dyn HostState>,
     source: String,
     current_line: Option<String>,
     current_choices: Option<Vec<String>>,
@@ -101,15 +102,19 @@ pub struct Runtime {
 }
 
 impl Runtime {
-    /// Create a new runtime with default in-memory storage.
+    /// Create a new runtime with default in-memory storage and no host state.
     ///
-    /// This is suitable for testing and simple games that don't need persistence.
-    /// For games that need save/load support, use [`with_storage`](Self::with_storage).
+    /// This is suitable for testing and simple games that don't need persistence
+    /// or host-provided variables.
     pub fn new(script: &str) -> Result<Self, BobbinError> {
-        Self::with_storage(script, Box::new(MemoryStorage::new()))
+        Self::with_storage_and_host(
+            script,
+            Box::new(MemoryStorage::new()),
+            Box::new(EmptyHostState),
+        )
     }
 
-    /// Create a new runtime with custom storage.
+    /// Create a new runtime with custom storage and no host state.
     ///
     /// Use this when you need dialogue state to persist across save/load cycles.
     /// The game provides a [`VariableStorage`] implementation that integrates
@@ -117,6 +122,18 @@ impl Runtime {
     pub fn with_storage(
         script: &str,
         storage: Box<dyn VariableStorage>,
+    ) -> Result<Self, BobbinError> {
+        Self::with_storage_and_host(script, storage, Box::new(EmptyHostState))
+    }
+
+    /// Create a new runtime with custom storage and host state.
+    ///
+    /// Use this when dialogue scripts need access to host-provided variables
+    /// (declared with `extern` in Bobbin scripts) in addition to persistent storage.
+    pub fn with_storage_and_host(
+        script: &str,
+        storage: Box<dyn VariableStorage>,
+        host_state: Box<dyn HostState>,
     ) -> Result<Self, BobbinError> {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
@@ -126,6 +143,7 @@ impl Runtime {
         let mut runtime = Self {
             vm: VM::new(chunk),
             storage,
+            host_state,
             source: script.to_string(),
             current_line: None,
             current_choices: None,
@@ -146,6 +164,11 @@ impl Runtime {
     /// Access the storage for inspection (useful for testing and debugging).
     pub fn storage(&self) -> &dyn VariableStorage {
         &*self.storage
+    }
+
+    /// Access the host state for inspection (useful for testing and debugging).
+    pub fn host_state(&self) -> &dyn HostState {
+        &*self.host_state
     }
 
     /// Advance to the next line of dialogue.

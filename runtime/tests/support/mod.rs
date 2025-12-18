@@ -3,12 +3,13 @@
 //! This module provides infrastructure for running data-driven tests using
 //! sidecar files that specify expected outputs.
 
+mod host_state;
 mod storage;
 
-use bobbin_runtime::{Runtime, Value};
+use bobbin_runtime::{MemoryStorage, Runtime, Value};
 use std::path::Path;
 
-pub use storage::MemoryStorage;
+pub use host_state::MockHostState;
 
 // =============================================================================
 // Trace File Data Structures
@@ -52,6 +53,8 @@ pub enum Action {
     Advance,
     /// Call select_choice(index)
     SelectChoice(usize),
+    /// Set a host variable value (collected before execution)
+    SetHost { name: String, value: Value },
 }
 
 // =============================================================================
@@ -136,13 +139,29 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
             )
         });
 
-    let mut runtime = Runtime::new(&source)
-        .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
+    // Pre-collect host values from trace
+    let mut host = MockHostState::new();
+    for step in &trace.steps {
+        if let Step::Action(Action::SetHost { name, value }) = step {
+            host.set(name.clone(), value.clone());
+        }
+    }
+
+    // Create runtime with host state
+    let mut runtime = Runtime::with_storage_and_host(
+        &source,
+        Box::new(MemoryStorage::new()),
+        Box::new(host),
+    )
+    .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
 
     for (step_idx, step) in trace.steps.iter().enumerate() {
         match step {
             Step::Assert(assertion) => {
                 execute_assertion(&runtime, assertion, case_path, path_name, step_idx);
+            }
+            Step::Action(Action::SetHost { .. }) => {
+                // Skip - host values were pre-collected before runtime creation
             }
             Step::Action(action) => {
                 execute_action(&mut runtime, action, case_path, path_name, step_idx);
@@ -287,7 +306,7 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
         return Some(Step::Assert(Assertion::StorageVar { name, value }));
     }
 
-    // Actions: [advance], [choice N]
+    // Actions: [advance], [choice N], [host name = value]
     if let Some(inner) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
         if inner == "advance" {
             return Some(Step::Action(Action::Advance));
@@ -297,6 +316,19 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
                 panic!("Line {}: Invalid choice index: {}", line_num, idx_str)
             });
             return Some(Step::Action(Action::SelectChoice(idx)));
+        }
+        if let Some(rest) = inner.strip_prefix("host ") {
+            // Parse "name = value"
+            let parts: Vec<&str> = rest.splitn(2, '=').collect();
+            if parts.len() == 2 {
+                let name = parts[0].trim().to_string();
+                let value = parse_value(parts[1].trim(), line_num);
+                return Some(Step::Action(Action::SetHost { name, value }));
+            }
+            panic!(
+                "Line {}: Invalid host action syntax: {}. Expected: [host name = value]",
+                line_num, inner
+            );
         }
         panic!("Line {}: Unknown action: {}", line_num, inner);
     }
@@ -457,6 +489,11 @@ fn execute_action(
                     e
                 )
             });
+        }
+        Action::SetHost { .. } => {
+            // SetHost actions are pre-collected and applied before runtime creation.
+            // They should be skipped in run_trace_test, but we handle them here
+            // for completeness if execute_action is called directly.
         }
     }
 }
