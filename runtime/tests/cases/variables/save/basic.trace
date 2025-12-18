@@ -1,0 +1,4 @@
+--- path: basic
+> Phil is a wonderful person
+$ name = "Phil"
+! done

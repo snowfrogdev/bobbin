@@ -7,6 +7,8 @@ use crate::scanner::Scanner;
 use crate::vm::{StepResult, VM};
 
 pub use crate::vm::RuntimeError;
+pub use crate::chunk::Value;
+pub use crate::storage::VariableStorage;
 
 mod ast;
 mod chunk;
@@ -14,6 +16,7 @@ mod compiler;
 mod parser;
 mod resolver;
 mod scanner;
+mod storage;
 mod token;
 mod vm;
 

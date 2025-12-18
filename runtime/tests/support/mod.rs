@@ -3,8 +3,12 @@
 //! This module provides infrastructure for running data-driven tests using
 //! sidecar files that specify expected outputs.
 
-use bobbin_runtime::Runtime;
+mod storage;
+
+use bobbin_runtime::{Runtime, Value};
 use std::path::Path;
+
+pub use storage::MemoryStorage;
 
 // =============================================================================
 // Trace File Data Structures
@@ -37,6 +41,8 @@ pub enum Assertion {
     HasMore,
     /// Assert is_waiting_for_choice() is true
     WaitingForChoice,
+    /// Assert a variable exists in storage with the given value
+    StorageVar { name: String, value: Value },
 }
 
 /// An action to perform on the runtime.
@@ -273,6 +279,12 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
         };
     }
 
+    // Storage variable assertion: $ name = value
+    if let Some(rest) = line.strip_prefix("$ ") {
+        let (name, value) = parse_storage_assertion(rest, line_num);
+        return Some(Step::Assert(Assertion::StorageVar { name, value }));
+    }
+
     // Actions: [advance], [choice N]
     if let Some(inner) = line.strip_prefix('[').and_then(|s| s.strip_suffix(']')) {
         if inner == "advance" {
@@ -288,6 +300,49 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
     }
 
     panic!("Line {}: Unparseable trace line: {}", line_num, line);
+}
+
+/// Parse a storage assertion like `name = "Phil"` or `count = 42`.
+fn parse_storage_assertion(rest: &str, line_num: usize) -> (String, Value) {
+    let parts: Vec<&str> = rest.splitn(2, " = ").collect();
+    if parts.len() != 2 {
+        panic!(
+            "Line {}: Invalid storage assertion syntax: {}. Expected: name = value",
+            line_num, rest
+        );
+    }
+
+    let name = parts[0].trim().to_string();
+    let value_str = parts[1].trim();
+
+    let value = parse_value(value_str, line_num);
+    (name, value)
+}
+
+/// Parse a literal value (string, number, or boolean).
+fn parse_value(s: &str, line_num: usize) -> Value {
+    // String: "..."
+    if let Some(inner) = s.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        return Value::String(inner.to_string());
+    }
+
+    // Boolean
+    if s == "true" {
+        return Value::Bool(true);
+    }
+    if s == "false" {
+        return Value::Bool(false);
+    }
+
+    // Number (f64)
+    if let Ok(n) = s.parse::<f64>() {
+        return Value::Number(n);
+    }
+
+    panic!(
+        "Line {}: Cannot parse value: {}. Expected string, number, or boolean.",
+        line_num, s
+    );
 }
 
 // =============================================================================
@@ -351,6 +406,20 @@ fn execute_assertion(
                 step_idx,
                 case_path.display(),
                 path_name
+            );
+        }
+        Assertion::StorageVar { name, value } => {
+            // TODO: Once Runtime exposes storage, change to:
+            // let actual = runtime.storage().get(name);
+            // assert_eq!(actual, Some(value.clone()), ...);
+            panic!(
+                "Storage assertion not yet supported at step {} in {} (path: {}): {} = {:?}. \
+                 Runtime needs to expose storage() method.",
+                step_idx,
+                case_path.display(),
+                path_name,
+                name,
+                value
             );
         }
     }
