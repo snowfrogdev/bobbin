@@ -1,0 +1,4 @@
+extern gold
+
+You have {gold} gold.
+set gold = 100

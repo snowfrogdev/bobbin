@@ -1,0 +1,10 @@
+# Tests multiple extern declarations in one script
+
+--- path: basic
+[host player_health = 75]
+[host player_gold = 250]
+[host player_name = "Adventurer"]
+> Welcome, Adventurer!
+[advance]
+> You have 75 HP and 250 gold.
+! done

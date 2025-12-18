@@ -117,6 +117,71 @@ fn extern_basic() {
     );
 }
 
+#[test]
+fn extern_types() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/extern/types.bobbin"),
+        "basic",
+    );
+}
+
+#[test]
+fn extern_multiple() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/extern/multiple.bobbin"),
+        "basic",
+    );
+}
+
+#[test]
+fn extern_in_choices_buy() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/extern/in_choices.bobbin"),
+        "buy",
+    );
+}
+
+#[test]
+fn extern_in_choices_leave() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/extern/in_choices.bobbin"),
+        "leave",
+    );
+}
+
+#[test]
+fn extern_mixed_with_temp_and_save() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/extern/mixed_with_temp_and_save.bobbin"),
+        "basic",
+    );
+}
+
+#[test]
+fn extern_missing_at_runtime() {
+    // Test that using a declared extern variable that the host doesn't provide
+    // results in a runtime error (MissingExternVariable)
+    use bobbin_runtime::{RuntimeError, Runtime};
+    use support::{EmptyHostState, MemoryStorage};
+
+    let source = "extern player_health\n\nYou have {player_health} HP.\n";
+
+    let storage = MemoryStorage::new();
+    let host = EmptyHostState; // Doesn't provide player_health
+
+    // Runtime::new steps on creation, which will try to interpolate the extern variable
+    let result = Runtime::new(source, &storage, &host);
+
+    // Should fail with MissingExternVariable since EmptyHostState doesn't provide it
+    match result {
+        Err(bobbin_runtime::BobbinError::Runtime(RuntimeError::MissingExternVariable { name })) => {
+            assert_eq!(name, "player_health");
+        }
+        Err(e) => panic!("Expected MissingExternVariable error, got: {:?}", e),
+        Ok(_) => panic!("Expected MissingExternVariable error, but runtime succeeded"),
+    }
+}
+
 // =============================================================================
 // Type-specific Interpolation
 // =============================================================================
@@ -277,4 +342,43 @@ fn errors_save_redeclaration() {
 #[test]
 fn errors_save_set_undefined() {
     support::run_error_test(&support::cases_dir().join("variables/errors/save_set_undefined.bobbin"));
+}
+
+// =============================================================================
+// Extern Semantic Errors
+// =============================================================================
+
+#[test]
+fn errors_extern_assignment() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/extern_assignment.bobbin"));
+}
+
+#[test]
+fn errors_extern_redeclaration() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/extern_redeclaration.bobbin"));
+}
+
+#[test]
+fn errors_extern_shadows_temp() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/extern_shadows_temp.bobbin"));
+}
+
+#[test]
+fn errors_temp_shadows_extern() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/temp_shadows_extern.bobbin"));
+}
+
+#[test]
+fn errors_extern_shadows_save() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/extern_shadows_save.bobbin"));
+}
+
+#[test]
+fn errors_save_shadows_extern() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/save_shadows_extern.bobbin"));
+}
+
+#[test]
+fn errors_extern_undefined() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/extern_undefined.bobbin"));
 }

@@ -1,0 +1,15 @@
+# Tests that extern variables work with all value types
+
+--- path: basic
+[host health = 100]
+[host name = "Hero"]
+[host is_vip = true]
+[host balance = 99.5]
+> Player: Hero
+[advance]
+> HP: 100
+[advance]
+> VIP: true
+[advance]
+> Balance: 99.5
+! done

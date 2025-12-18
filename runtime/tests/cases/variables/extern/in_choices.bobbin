@@ -1,0 +1,8 @@
+extern gold
+
+You have {gold} gold pieces.
+- Buy sword (50 gold)
+    Your gold: {gold}
+    Thanks for your purchase!
+- Leave
+    You decide to save your {gold} gold.
