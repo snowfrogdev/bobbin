@@ -48,8 +48,11 @@ These questions arise because different use cases have different requirements:
 ## Decision Outcome
 
 Chosen options:
+
 - **Two interfaces** (Option 2) for clear ownership semantics
 - **Hybrid static/dynamic typing** (Option 6) for practical type safety
+
+> **Implementation note (2025-01)**: The current implementation uses dynamic typing for all variable categories. Static type checking for `temp` and `save` variables is planned but not yet implemented.
 
 ### Two-Interface Architecture
 

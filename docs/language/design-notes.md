@@ -24,16 +24,16 @@ else:
 
 ### Type System
 
-**Decision**: Hybrid static/dynamic typing based on variable category.
+**Decision**: Hybrid static/dynamic typing based on variable category (see ADR-0004).
 
 Bobbin supports these internal types:
-- `bool` - true/false
-- `int` - integers
-- `float` - floating-point numbers
-- `string` - text
-- `table` - key-value pairs (syntax TBD)
 
-Type checking varies by variable category:
+- `bool` - true/false
+- `number` - floating-point numbers (f64), displayed as integers when whole
+- `string` - text
+- `table` - key-value pairs (planned, not yet implemented)
+
+The planned type checking varies by variable category:
 
 | Category | Keyword | Typing | Checking |
 |----------|---------|--------|----------|
@@ -41,19 +41,7 @@ Type checking varies by variable category:
 | Dialogue globals | `save` | Static | Compile-time + runtime verification |
 | Host variables | `extern` | Dynamic | Runtime only |
 
-**Temporary variables** (`temp`) are fully statically typed. The compiler infers the type from the initial value and catches type mismatches at compile time.
-
-**Dialogue globals** (`save`) have static typing with runtime verification. The declared type is checked at compile time, and the runtime verifies that values retrieved from storage match the expected type. If the storage returns a value of the wrong type, that's a runtime error.
-
-**Host variables** (`extern`) are dynamically typed. Since the host provides these values at runtime, Bobbin cannot know their types until lookup. Type mismatches in expressions are runtime errors.
-
-**Rationale**:
-- Static typing for `temp` and `save` catches most errors at compile time
-- Runtime verification at the storage boundary handles the reality that storage is external
-- Dynamic typing for host variables is necessary since types are unknown until runtime
-- This balance maximizes error detection while remaining practical
-
-See ADR-0004 for the full architecture.
+> **Current implementation**: All variables are dynamically typed. Static type checking for `temp` and `save` is planned but not yet implemented.
 
 ### Host Variable Declaration (`extern`)
 
@@ -253,10 +241,9 @@ When implementing, the scanner should recognize these line prefixes:
 ```rust
 pub enum Value {
     Bool(bool),
-    Int(i64),
-    Float(f64),
+    Number(f64),
     String(String),
-    Table(HashMap<String, Value>),
+    // Table(HashMap<String, Value>),  // Planned, not yet implemented
 }
 ```
 
