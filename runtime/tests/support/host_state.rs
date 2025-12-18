@@ -1,7 +1,20 @@
-//! Mock implementation of HostState for testing.
+//! Host state implementations for testing.
 
 use bobbin_runtime::{HostState, Value};
 use std::collections::HashMap;
+
+/// Empty host state that provides no variables.
+///
+/// This is the default implementation used when no host state is needed.
+/// All lookups return `None`.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct EmptyHostState;
+
+impl HostState for EmptyHostState {
+    fn lookup(&self, _name: &str) -> Option<Value> {
+        None
+    }
+}
 
 /// Mock implementation of HostState for testing.
 ///

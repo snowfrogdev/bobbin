@@ -6,10 +6,11 @@
 mod host_state;
 mod storage;
 
-use bobbin_runtime::{MemoryStorage, Runtime, Value};
+use bobbin_runtime::{Runtime, Value, VariableStorage};
 use std::path::Path;
 
-pub use host_state::MockHostState;
+pub use host_state::{EmptyHostState, MockHostState};
+pub use storage::MemoryStorage;
 
 // =============================================================================
 // Trace File Data Structures
@@ -72,7 +73,9 @@ pub fn run_output_test(case_path: &Path) {
     let expected = std::fs::read_to_string(&out_path)
         .unwrap_or_else(|e| panic!("Failed to read expected output {}: {}", out_path.display(), e));
 
-    let mut runtime = Runtime::new(&source)
+    let storage = MemoryStorage::new();
+    let host = EmptyHostState;
+    let mut runtime = Runtime::new(&source, &storage, &host)
         .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
 
     let expected_lines: Vec<&str> = expected.lines().collect();
@@ -148,17 +151,29 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
     }
 
     // Create runtime with host state
-    let mut runtime = Runtime::with_storage_and_host(
-        &source,
-        Box::new(MemoryStorage::new()),
-        Box::new(host),
-    )
-    .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
+    let storage = MemoryStorage::new();
+    let mut runtime = Runtime::new(&source, &storage, &host)
+        .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
 
     for (step_idx, step) in trace.steps.iter().enumerate() {
         match step {
+            Step::Assert(Assertion::StorageVar { name, value }) => {
+                // Access storage directly (shared reference allows this)
+                let actual = storage.get(name);
+                assert_eq!(
+                    actual,
+                    Some(value.clone()),
+                    "Storage variable mismatch at step {} in {} (path: {})\nVariable: {}\nExpected: {:?}\nActual: {:?}",
+                    step_idx,
+                    case_path.display(),
+                    path_name,
+                    name,
+                    Some(value.clone()),
+                    actual
+                );
+            }
             Step::Assert(assertion) => {
-                execute_assertion(&runtime, assertion, case_path, path_name, step_idx);
+                execute_runtime_assertion(&runtime, assertion, case_path, path_name, step_idx);
             }
             Step::Action(Action::SetHost { .. }) => {
                 // Skip - host values were pre-collected before runtime creation
@@ -181,7 +196,9 @@ pub fn run_error_test(case_path: &Path) {
     let expected = std::fs::read_to_string(&err_path)
         .unwrap_or_else(|e| panic!("Failed to read expected error {}: {}", err_path.display(), e));
 
-    match Runtime::new(&source) {
+    let storage = MemoryStorage::new();
+    let host = EmptyHostState;
+    match Runtime::new(&source, &storage, &host) {
         Ok(_) => {
             panic!(
                 "Expected error in {} but script executed successfully",
@@ -383,7 +400,11 @@ fn parse_value(s: &str, line_num: usize) -> Value {
 // Execution Helpers
 // =============================================================================
 
-fn execute_assertion(
+/// Execute a runtime-related assertion (not storage assertions).
+///
+/// StorageVar assertions are handled inline in `run_trace_test` by accessing
+/// storage directly (enabled by interior mutability).
+fn execute_runtime_assertion(
     runtime: &Runtime,
     assertion: &Assertion,
     case_path: &Path,
@@ -442,8 +463,81 @@ fn execute_assertion(
                 path_name
             );
         }
+        Assertion::StorageVar { .. } => {
+            // StorageVar assertions are handled inline in run_trace_test
+            panic!(
+                "execute_runtime_assertion called with StorageVar at step {} in {} (path: {}). This is a bug - StorageVar should be handled inline.",
+                step_idx,
+                case_path.display(),
+                path_name
+            );
+        }
+    }
+}
+
+#[allow(dead_code)]
+fn execute_assertion(
+    runtime: &Runtime,
+    storage: &dyn VariableStorage,
+    assertion: &Assertion,
+    case_path: &Path,
+    path_name: &str,
+    step_idx: usize,
+) {
+    match assertion {
+        Assertion::Line(expected) => {
+            let actual = runtime.current_line();
+            assert_eq!(
+                actual, expected,
+                "Line mismatch at step {} in {} (path: {})\nExpected: {:?}\nActual: {:?}",
+                step_idx,
+                case_path.display(),
+                path_name,
+                expected,
+                actual
+            );
+        }
+        Assertion::Choices(expected) => {
+            let actual = runtime.current_choices();
+            assert_eq!(
+                actual, expected,
+                "Choices mismatch at step {} in {} (path: {})\nExpected: {:?}\nActual: {:?}",
+                step_idx,
+                case_path.display(),
+                path_name,
+                expected,
+                actual
+            );
+        }
+        Assertion::Done => {
+            assert!(
+                !runtime.has_more(),
+                "Expected done at step {} in {} (path: {}), but has_more() is true",
+                step_idx,
+                case_path.display(),
+                path_name
+            );
+        }
+        Assertion::HasMore => {
+            assert!(
+                runtime.has_more(),
+                "Expected has_more at step {} in {} (path: {}), but has_more() is false",
+                step_idx,
+                case_path.display(),
+                path_name
+            );
+        }
+        Assertion::WaitingForChoice => {
+            assert!(
+                runtime.is_waiting_for_choice(),
+                "Expected waiting_for_choice at step {} in {} (path: {}), but is_waiting_for_choice() is false",
+                step_idx,
+                case_path.display(),
+                path_name
+            );
+        }
         Assertion::StorageVar { name, value } => {
-            let actual = runtime.storage().get(name);
+            let actual = storage.get(name);
             assert_eq!(
                 actual,
                 Some(value.clone()),

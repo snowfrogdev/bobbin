@@ -3,6 +3,7 @@
 mod support;
 
 use bobbin_runtime::Runtime;
+use support::{EmptyHostState, MemoryStorage};
 
 #[test]
 fn simple_lines() {
@@ -17,7 +18,9 @@ fn empty_lines() {
 #[test]
 fn empty_source() {
     // Special case: empty source produces empty output
-    let runtime = Runtime::new("").unwrap();
+    let storage = MemoryStorage::new();
+    let host = EmptyHostState;
+    let runtime = Runtime::new("", &storage, &host).unwrap();
     assert_eq!(runtime.current_line(), "");
     assert!(!runtime.has_more());
 }
