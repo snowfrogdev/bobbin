@@ -6,8 +6,9 @@
 mod host_state;
 mod storage;
 
-use bobbin_runtime::{Runtime, Value, VariableStorage};
+use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
 use std::path::Path;
+use std::sync::Arc;
 
 pub use host_state::{EmptyHostState, MockHostState};
 pub use storage::MemoryStorage;
@@ -73,9 +74,9 @@ pub fn run_output_test(case_path: &Path) {
     let expected = std::fs::read_to_string(&out_path)
         .unwrap_or_else(|e| panic!("Failed to read expected output {}: {}", out_path.display(), e));
 
-    let storage = MemoryStorage::new();
-    let host = EmptyHostState;
-    let mut runtime = Runtime::new(&source, &storage, &host)
+    let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
+    let host: Arc<dyn HostState> = Arc::new(EmptyHostState);
+    let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
         .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
 
     let expected_lines: Vec<&str> = expected.lines().collect();
@@ -151,14 +152,15 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
     }
 
     // Create runtime with host state
-    let storage = MemoryStorage::new();
-    let mut runtime = Runtime::new(&source, &storage, &host)
+    let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
+    let host: Arc<dyn HostState> = Arc::new(host);
+    let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
         .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
 
     for (step_idx, step) in trace.steps.iter().enumerate() {
         match step {
             Step::Assert(Assertion::StorageVar { name, value }) => {
-                // Access storage directly (shared reference allows this)
+                // Access storage directly (Arc allows shared access)
                 let actual = storage.get(name);
                 assert_eq!(
                     actual,
@@ -196,9 +198,9 @@ pub fn run_error_test(case_path: &Path) {
     let expected = std::fs::read_to_string(&err_path)
         .unwrap_or_else(|e| panic!("Failed to read expected error {}: {}", err_path.display(), e));
 
-    let storage = MemoryStorage::new();
-    let host = EmptyHostState;
-    match Runtime::new(&source, &storage, &host) {
+    let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
+    let host: Arc<dyn HostState> = Arc::new(EmptyHostState);
+    match Runtime::new(&source, storage, host) {
         Ok(_) => {
             panic!(
                 "Expected error in {} but script executed successfully",

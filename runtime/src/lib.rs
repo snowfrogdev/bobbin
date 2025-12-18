@@ -1,4 +1,5 @@
 use std::fmt;
+use std::sync::Arc;
 
 use crate::compiler::{CompileError, Compiler};
 use crate::parser::{ParseError, Parser};
@@ -91,40 +92,42 @@ impl BobbinError {
     }
 }
 
-pub struct Runtime<'ctx> {
-    vm: VM<'ctx>,
+pub struct Runtime {
+    vm: VM,
+    storage: Arc<dyn VariableStorage>,
+    host: Arc<dyn HostState>,
     current_line: Option<String>,
     current_choices: Option<Vec<String>>,
     is_done: bool,
 }
 
-impl<'ctx> Runtime<'ctx> {
+impl Runtime {
     /// Create a new runtime with the given storage and host state.
     ///
-    /// The caller owns the storage and host state; the runtime borrows them
-    /// for the duration of its lifetime. This design allows the game engine
-    /// to maintain ownership of its systems while the dialogue runtime
-    /// operates on them.
+    /// Both the game and the runtime share ownership of storage and host via `Arc`.
+    /// This design allows the game engine to read and write storage while the
+    /// dialogue runtime operates on them.
     ///
-    /// Both storage and host use shared references (`&dyn`), enabling the game
-    /// to read and write storage while the runtime exists. Storage implementations
-    /// use interior mutability (e.g., `RefCell`) to handle writes.
+    /// Storage implementations use interior mutability (e.g., `RwLock`) to handle
+    /// concurrent reads and writes safely.
     ///
     /// # Example
     ///
     /// ```ignore
-    /// let storage = MemoryStorage::new();
-    /// let host = EmptyHostState;
-    /// let mut runtime = Runtime::new(script, &storage, &host)?;
+    /// use std::sync::Arc;
     ///
-    /// // Game can read/write storage anytime:
+    /// let storage = Arc::new(MemoryStorage::new());
+    /// let host = Arc::new(EmptyHostState);
+    /// let mut runtime = Runtime::new(script, Arc::clone(&storage), Arc::clone(&host))?;
+    ///
+    /// // Game can read/write storage anytime via its Arc:
     /// let value = storage.get("reputation");
     /// storage.set("quest_complete", Value::Bool(true));
     /// ```
     pub fn new(
         script: &str,
-        storage: &'ctx dyn VariableStorage,
-        host: &'ctx dyn HostState,
+        storage: Arc<dyn VariableStorage>,
+        host: Arc<dyn HostState>,
     ) -> Result<Self, BobbinError> {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
@@ -132,13 +135,25 @@ impl<'ctx> Runtime<'ctx> {
         let chunk = Compiler::new(&ast, &symbols).compile()?;
 
         let mut runtime = Self {
-            vm: VM::new(chunk, storage, host),
+            vm: VM::new(chunk, Arc::clone(&storage), Arc::clone(&host)),
+            storage,
+            host,
             current_line: None,
             current_choices: None,
             is_done: false,
         };
         runtime.step_vm()?;
         Ok(runtime)
+    }
+
+    /// Get a reference to the storage for external access.
+    pub fn storage(&self) -> &Arc<dyn VariableStorage> {
+        &self.storage
+    }
+
+    /// Get a reference to the host state for external access.
+    pub fn host(&self) -> &Arc<dyn HostState> {
+        &self.host
     }
 
     pub fn current_line(&self) -> &str {

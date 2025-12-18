@@ -1,6 +1,17 @@
-[gd_scene load_steps=3 format=3 uid="uid://ca43g8wjyhecf"]
+[gd_scene load_steps=4 format=3 uid="uid://ca43g8wjyhecf"]
 
 [ext_resource type="Script" uid="uid://dkrbx3p2ho668" path="res://scripts/test_cutscene.gd" id="1_script"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_status"]
+content_margin_left = 12.0
+content_margin_top = 12.0
+content_margin_right = 12.0
+content_margin_bottom = 12.0
+bg_color = Color(0.08, 0.1, 0.12, 0.85)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
 content_margin_left = 20.0
@@ -28,6 +39,69 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.08, 0.06, 0.12, 1)
+
+[node name="StatusPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -260.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 10.0
+grow_horizontal = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_status")
+
+[node name="VBoxContainer" type="VBoxContainer" parent="StatusPanel"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StatusLabel" type="Label" parent="StatusPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.8, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+text = "=== Host State ===
+player_name: Hero
+player_gold: 150
+
+=== Save Variables ==="
+
+[node name="Separator" type="HSeparator" parent="StatusPanel/VBoxContainer"]
+layout_mode = 2
+
+[node name="GameActionsLabel" type="Label" parent="StatusPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.7, 0.6, 1)
+theme_override_font_sizes/font_size = 11
+text = "=== Game Actions ==="
+
+[node name="GoldButtons" type="HBoxContainer" parent="StatusPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddGoldButton" type="Button" parent="StatusPanel/VBoxContainer/GoldButtons"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "+10 Gold"
+
+[node name="RemoveGoldButton" type="Button" parent="StatusPanel/VBoxContainer/GoldButtons"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-10 Gold"
+
+[node name="ReputationButtons" type="HBoxContainer" parent="StatusPanel/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="AddRepButton" type="Button" parent="StatusPanel/VBoxContainer/ReputationButtons"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "+10 Rep"
+
+[node name="RemoveRepButton" type="Button" parent="StatusPanel/VBoxContainer/ReputationButtons"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "-10 Rep"
 
 [node name="DialogPanel" type="PanelContainer" parent="."]
 layout_mode = 1

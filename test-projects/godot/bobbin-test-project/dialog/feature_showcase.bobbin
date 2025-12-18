@@ -1,0 +1,59 @@
+extern player_name
+extern player_gold
+
+save visit_count = 0
+save reputation = 50
+
+temp greeting = "Welcome"
+
+set visit_count = 1
+
+{greeting}, {player_name}! This is visit number {visit_count}.
+I see you have {player_gold} gold coins.
+Your reputation is {reputation}.
+
+temp lucky_number = 7
+temp price = 19.99
+temp is_vip = false
+
+Your lucky number is {lucky_number}.
+Special price today: {price} gold.
+VIP status: {is_vip}.
+
+What would you like to do?
+
+- Ask about the village
+  You asked about the village.
+  - Learn about history
+    The village was founded 200 years ago by settlers.
+    They built the inn first, then everything else.
+  - Ask about shops
+    There's a blacksmith near the square.
+    The general store is just past the well.
+  That's all I know about this place.
+
+- Look for work
+  Looking for work, {player_name}?
+  - Help with deliveries (5 gold)
+    temp reward = 5
+    You help carry packages around town.
+    Here's {reward} gold for your trouble!
+    set reputation = 60
+    The townsfolk appreciate your help.
+    Reputation now: {reputation}.
+  - Guard duty (10 gold)
+    temp reward = 10
+    Brave of you to volunteer!
+    You stand watch through the night.
+    Here's {reward} gold for your service.
+    set reputation = 70
+    The guards speak highly of you.
+    Reputation now: {reputation}.
+  Thanks for helping out.
+
+- Just passing through
+  temp farewell = "Safe travels"
+  {farewell}, {player_name}!
+
+Summary: {player_name}, gold={player_gold}, reputation={reputation}.
+Come back anytime!
