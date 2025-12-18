@@ -1,0 +1,12 @@
+# Tests extern, save, and temp variables working together
+
+--- path: basic
+[host player_name = "Hero"]
+$ reputation = 0
+> Hello, Hero!
+[advance]
+> Your reputation is 0.
+[advance]
+$ reputation = 10
+> Now your reputation is 10.
+! done

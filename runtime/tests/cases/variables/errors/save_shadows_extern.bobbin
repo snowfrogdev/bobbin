@@ -1,0 +1,4 @@
+extern gold
+save gold = 50
+
+You have {gold} gold.

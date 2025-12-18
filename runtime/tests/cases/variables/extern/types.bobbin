@@ -1,0 +1,9 @@
+extern health
+extern name
+extern is_vip
+extern balance
+
+Player: {name}
+HP: {health}
+VIP: {is_vip}
+Balance: {balance}

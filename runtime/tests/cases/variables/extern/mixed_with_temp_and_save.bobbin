@@ -1,0 +1,8 @@
+extern player_name
+save reputation = 0
+temp greeting = "Hello"
+
+{greeting}, {player_name}!
+Your reputation is {reputation}.
+set reputation = 10
+Now your reputation is {reputation}.

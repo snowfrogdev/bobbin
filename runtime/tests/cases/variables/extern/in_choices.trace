@@ -1,0 +1,21 @@
+# Tests extern variables in choice text and choice bodies
+
+--- path: buy
+[host gold = 100]
+> You have 100 gold pieces.
+[advance]
+? Buy sword (50 gold) | Leave
+[choice 0]
+> Your gold: 100
+[advance]
+> Thanks for your purchase!
+! done
+
+--- path: leave
+[host gold = 100]
+> You have 100 gold pieces.
+[advance]
+? Buy sword (50 gold) | Leave
+[choice 1]
+> You decide to save your 100 gold.
+! done

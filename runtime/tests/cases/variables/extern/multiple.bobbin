@@ -1,0 +1,6 @@
+extern player_health
+extern player_gold
+extern player_name
+
+Welcome, {player_name}!
+You have {player_health} HP and {player_gold} gold.
