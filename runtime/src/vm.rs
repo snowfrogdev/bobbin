@@ -1,5 +1,5 @@
 use crate::chunk::{Chunk, Instruction, Value};
-use crate::storage::VariableStorage;
+use crate::storage::{HostState, VariableStorage};
 
 #[derive(Debug, Clone)]
 pub enum RuntimeError {
@@ -9,6 +9,8 @@ pub enum RuntimeError {
     InvalidChoiceIndex { index: usize, count: usize },
     /// Save variable not found in storage (storage may be corrupted or cleared)
     MissingSaveVariable { name: String },
+    /// Extern variable not found in host state
+    MissingExternVariable { name: String },
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -34,6 +36,13 @@ impl std::fmt::Display for RuntimeError {
                     name
                 )
             }
+            RuntimeError::MissingExternVariable { name } => {
+                write!(
+                    f,
+                    "extern variable '{}' not found in host state",
+                    name
+                )
+            }
         }
     }
 }
@@ -46,19 +55,36 @@ pub(crate) enum StepResult {
     Done,
 }
 
-#[derive(Debug)]
-pub struct VM {
+pub struct VM<'ctx> {
     chunk: Chunk,
     ip: usize,
     stack: Vec<Value>,
+    storage: &'ctx dyn VariableStorage,
+    host: &'ctx dyn HostState,
 }
 
-impl VM {
-    pub fn new(chunk: Chunk) -> Self {
+impl std::fmt::Debug for VM<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VM")
+            .field("chunk", &self.chunk)
+            .field("ip", &self.ip)
+            .field("stack", &self.stack)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'ctx> VM<'ctx> {
+    pub fn new(
+        chunk: Chunk,
+        storage: &'ctx dyn VariableStorage,
+        host: &'ctx dyn HostState,
+    ) -> Self {
         Self {
             chunk,
             ip: 0,
             stack: Vec::new(),
+            storage,
+            host,
         }
     }
 
@@ -83,7 +109,6 @@ impl VM {
     pub(crate) fn select_and_continue(
         &mut self,
         index: usize,
-        storage: &mut dyn VariableStorage,
     ) -> Result<StepResult, RuntimeError> {
         // Read ChoiceSet to get targets
         let instruction = self.chunk.code[self.ip].clone();
@@ -99,16 +124,16 @@ impl VM {
         }
 
         // Continue normal execution
-        self.run(storage)
+        self.run()
     }
 
     /// Execute until we hit a pause point (Line, Choice) or Done.
-    pub(crate) fn step(&mut self, storage: &mut dyn VariableStorage) -> Result<StepResult, RuntimeError> {
-        self.run(storage)
+    pub(crate) fn step(&mut self) -> Result<StepResult, RuntimeError> {
+        self.run()
     }
 
     /// Core execution loop.
-    fn run(&mut self, storage: &mut dyn VariableStorage) -> Result<StepResult, RuntimeError> {
+    fn run(&mut self) -> Result<StepResult, RuntimeError> {
         loop {
             let instruction = self.chunk.code[self.ip].clone();
             self.ip += 1;
@@ -159,17 +184,23 @@ impl VM {
                 }
                 Instruction::InitStorage { name } => {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
-                    storage.initialize_if_absent(&name, value);
+                    self.storage.initialize_if_absent(&name, value);
                 }
                 Instruction::GetStorage { name } => {
-                    match storage.get(&name) {
+                    match self.storage.get(&name) {
                         Some(value) => self.stack.push(value),
                         None => return Err(RuntimeError::MissingSaveVariable { name }),
                     }
                 }
                 Instruction::SetStorage { name } => {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
-                    storage.set(&name, value);
+                    self.storage.set(&name, value);
+                }
+                Instruction::GetHost { name } => {
+                    match self.host.lookup(&name) {
+                        Some(value) => self.stack.push(value),
+                        None => return Err(RuntimeError::MissingExternVariable { name }),
+                    }
                 }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK

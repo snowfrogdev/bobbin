@@ -8,7 +8,7 @@ use crate::vm::{StepResult, VM};
 
 pub use crate::vm::RuntimeError;
 pub use crate::chunk::Value;
-pub use crate::storage::{EmptyHostState, HostState, MemoryStorage, VariableStorage};
+pub use crate::storage::{HostState, VariableStorage};
 
 mod ast;
 mod chunk;
@@ -91,49 +91,40 @@ impl BobbinError {
     }
 }
 
-pub struct Runtime {
-    vm: VM,
-    storage: Box<dyn VariableStorage>,
-    host_state: Box<dyn HostState>,
-    source: String,
+pub struct Runtime<'ctx> {
+    vm: VM<'ctx>,
     current_line: Option<String>,
     current_choices: Option<Vec<String>>,
     is_done: bool,
 }
 
-impl Runtime {
-    /// Create a new runtime with default in-memory storage and no host state.
+impl<'ctx> Runtime<'ctx> {
+    /// Create a new runtime with the given storage and host state.
     ///
-    /// This is suitable for testing and simple games that don't need persistence
-    /// or host-provided variables.
-    pub fn new(script: &str) -> Result<Self, BobbinError> {
-        Self::with_storage_and_host(
-            script,
-            Box::new(MemoryStorage::new()),
-            Box::new(EmptyHostState),
-        )
-    }
-
-    /// Create a new runtime with custom storage and no host state.
+    /// The caller owns the storage and host state; the runtime borrows them
+    /// for the duration of its lifetime. This design allows the game engine
+    /// to maintain ownership of its systems while the dialogue runtime
+    /// operates on them.
     ///
-    /// Use this when you need dialogue state to persist across save/load cycles.
-    /// The game provides a [`VariableStorage`] implementation that integrates
-    /// with its save system.
-    pub fn with_storage(
+    /// Both storage and host use shared references (`&dyn`), enabling the game
+    /// to read and write storage while the runtime exists. Storage implementations
+    /// use interior mutability (e.g., `RefCell`) to handle writes.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let storage = MemoryStorage::new();
+    /// let host = EmptyHostState;
+    /// let mut runtime = Runtime::new(script, &storage, &host)?;
+    ///
+    /// // Game can read/write storage anytime:
+    /// let value = storage.get("reputation");
+    /// storage.set("quest_complete", Value::Bool(true));
+    /// ```
+    pub fn new(
         script: &str,
-        storage: Box<dyn VariableStorage>,
-    ) -> Result<Self, BobbinError> {
-        Self::with_storage_and_host(script, storage, Box::new(EmptyHostState))
-    }
-
-    /// Create a new runtime with custom storage and host state.
-    ///
-    /// Use this when dialogue scripts need access to host-provided variables
-    /// (declared with `extern` in Bobbin scripts) in addition to persistent storage.
-    pub fn with_storage_and_host(
-        script: &str,
-        storage: Box<dyn VariableStorage>,
-        host_state: Box<dyn HostState>,
+        storage: &'ctx dyn VariableStorage,
+        host: &'ctx dyn HostState,
     ) -> Result<Self, BobbinError> {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
@@ -141,10 +132,7 @@ impl Runtime {
         let chunk = Compiler::new(&ast, &symbols).compile()?;
 
         let mut runtime = Self {
-            vm: VM::new(chunk),
-            storage,
-            host_state,
-            source: script.to_string(),
+            vm: VM::new(chunk, storage, host),
             current_line: None,
             current_choices: None,
             is_done: false,
@@ -159,16 +147,6 @@ impl Runtime {
 
     pub fn current_choices(&self) -> &[String] {
         self.current_choices.as_deref().unwrap_or(&[])
-    }
-
-    /// Access the storage for inspection (useful for testing and debugging).
-    pub fn storage(&self) -> &dyn VariableStorage {
-        &*self.storage
-    }
-
-    /// Access the host state for inspection (useful for testing and debugging).
-    pub fn host_state(&self) -> &dyn HostState {
-        &*self.host_state
     }
 
     /// Advance to the next line of dialogue.
@@ -192,14 +170,14 @@ impl Runtime {
     pub fn select_choice(&mut self, index: usize) -> Result<(), RuntimeError> {
         if self.current_choices.is_some() {
             self.current_choices = None;
-            let result = self.vm.select_and_continue(index, &mut *self.storage)?;
+            let result = self.vm.select_and_continue(index)?;
             self.handle_step_result(result);
         }
         Ok(())
     }
 
     fn step_vm(&mut self) -> Result<(), RuntimeError> {
-        let result = self.vm.step(&mut *self.storage)?;
+        let result = self.vm.step()?;
         self.handle_step_result(result);
         Ok(())
     }

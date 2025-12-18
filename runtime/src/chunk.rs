@@ -39,6 +39,10 @@ pub enum Instruction {
     SetStorage {
         name: String,
     },
+    /// Read a host variable via HostState and push onto stack.
+    GetHost {
+        name: String,
+    },
     Return,
 }
 

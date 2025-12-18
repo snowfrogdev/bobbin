@@ -11,6 +11,7 @@ pub enum TokenKind {
     Temp,
     Save,
     Set,
+    Extern,
 
     // Identifiers and Literals
     Identifier,

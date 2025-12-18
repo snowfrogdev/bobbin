@@ -18,6 +18,7 @@ pub enum Stmt {
     },
     TempDecl(VarBindingData),
     SaveDecl(VarBindingData),
+    ExternDecl(ExternDeclData),
     Assignment(VarBindingData),
     ChoiceSet {
         choices: Vec<Choice>,
@@ -60,5 +61,13 @@ pub struct VarBindingData {
     pub id: NodeId,
     pub name: String,
     pub value: Literal,
+    pub span: Span,
+}
+
+/// Declaration of a host-provided variable (read-only from dialogue perspective)
+#[derive(Debug, Clone)]
+pub struct ExternDeclData {
+    pub id: NodeId,
+    pub name: String,
     pub span: Span,
 }

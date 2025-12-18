@@ -32,6 +32,8 @@ enum ScanMode {
     LineStart,
     /// After a keyword (temp/save/set), expect: identifier = literal
     Declaration,
+    /// After extern keyword, expect: identifier only (no initializer)
+    ExternDeclaration,
     /// Scanning text content (dialogue lines, choice text)
     Text,
     /// Inside an interpolation {}, expect identifier
@@ -98,6 +100,7 @@ impl<'a> Scanner<'a> {
             ScanMode::Indentation => unreachable!("should have been handled above"),
             ScanMode::LineStart => self.scan_line_start(),
             ScanMode::Declaration => self.scan_declaration_content(),
+            ScanMode::ExternDeclaration => self.scan_extern_declaration(),
             ScanMode::Text => self.scan_text_content(),
             ScanMode::Interpolation => self.scan_interpolation_content(),
         }
@@ -113,6 +116,9 @@ impl<'a> Scanner<'a> {
             return Ok(tok);
         }
         if let Some(tok) = self.try_keyword("set", TokenKind::Set, ScanMode::Declaration) {
+            return Ok(tok);
+        }
+        if let Some(tok) = self.try_keyword("extern", TokenKind::Extern, ScanMode::ExternDeclaration) {
             return Ok(tok);
         }
 
@@ -187,6 +193,24 @@ impl<'a> Scanner<'a> {
         }
 
         Err(self.error("Unexpected character in declaration"))
+    }
+
+    /// Scan extern declaration content: identifier only (no initializer)
+    fn scan_extern_declaration(&mut self) -> Result<Token<'a>, LexicalError> {
+        self.skip_spaces();
+        self.start = self.current;
+
+        if self.is_at_end() || self.is_at_newline() {
+            return Err(self.error("Expected identifier after 'extern'"));
+        }
+
+        let c = self.peek().unwrap();
+        if c.is_ascii_alphabetic() || c == '_' {
+            self.mode = ScanMode::LineStart;
+            return self.scan_identifier();
+        }
+
+        Err(self.error("Expected identifier after 'extern'"))
     }
 
     /// Scan text content with interpolation support

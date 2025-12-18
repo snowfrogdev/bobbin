@@ -44,11 +44,19 @@ impl<'a> Compiler<'a> {
         self.symbols.save_bindings.get(&id).map(|s| s.as_str())
     }
 
-    /// Emit instruction to read a variable (temp or save) and push onto stack.
+    /// Look up the extern variable name for a NodeId. Returns None if not an extern variable.
+    fn get_extern_name(&self, id: NodeId) -> Option<&str> {
+        self.symbols.extern_bindings.get(&id).map(|s| s.as_str())
+    }
+
+    /// Emit instruction to read a variable (temp, save, or extern) and push onto stack.
     fn emit_var_read(&mut self, id: NodeId, line: usize) {
         if let Some(name) = self.get_save_name(id) {
             self.chunk
                 .emit(Instruction::GetStorage { name: name.to_string() }, line);
+        } else if let Some(name) = self.get_extern_name(id) {
+            self.chunk
+                .emit(Instruction::GetHost { name: name.to_string() }, line);
         } else {
             let slot = self.get_slot(id);
             self.chunk.emit(Instruction::GetLocal { slot }, line);
@@ -81,6 +89,10 @@ impl<'a> Compiler<'a> {
                     Instruction::InitStorage { name: name.clone() },
                     span.start,
                 );
+            }
+            Stmt::ExternDecl(_) => {
+                // No-op: extern declarations don't generate code.
+                // The host provides values on-demand when GetHost executes.
             }
             Stmt::Assignment(VarBindingData { id, value, span, .. }) => {
                 // Assignment modifies an existing variable (temp or save).

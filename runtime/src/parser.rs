@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 
-use crate::ast::{Choice, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
+use crate::ast::{Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::scanner::{LexicalError, offset_to_position};
 use crate::token::{Span, Token, TokenKind};
 
@@ -78,6 +78,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             Some(Ok(t)) => match t.kind {
                 TokenKind::Temp => Some(self.temp_declaration()),
                 TokenKind::Save => Some(self.save_declaration()),
+                TokenKind::Extern => Some(self.extern_declaration()),
                 TokenKind::Set => Some(self.assignment()),
                 TokenKind::TextSegment | TokenKind::OpenBrace => Some(self.line_statement()),
                 TokenKind::Choice => Some(self.choice_set()),
@@ -149,6 +150,35 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         let start_token = self.advance(); // Consume 'save'
         let data = self.parse_var_binding("save", start_token.span.start);
         Stmt::SaveDecl(data)
+    }
+
+    /// Parse an extern declaration: extern name (no initializer)
+    fn extern_declaration(&mut self) -> Stmt {
+        let start_token = self.advance(); // Consume 'extern'
+        let id = self.next_id();
+
+        // Expect identifier (no = literal for extern)
+        let (name, end) = if self.check(TokenKind::Identifier) {
+            let token = self.advance();
+            (token.lexeme.to_string(), token.span.end)
+        } else {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: "Expected identifier after 'extern'".to_string(),
+                span,
+            });
+            self.synchronize();
+            (String::new(), start_token.span.end)
+        };
+
+        Stmt::ExternDecl(ExternDeclData {
+            id,
+            name,
+            span: Span {
+                start: start_token.span.start,
+                end,
+            },
+        })
     }
 
     /// Parse an assignment: set name = value
