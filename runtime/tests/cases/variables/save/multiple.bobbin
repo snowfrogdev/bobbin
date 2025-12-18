@@ -1,0 +1,5 @@
+save player_name = "Hero"
+save gold = 100
+save health = 50
+Welcome, {player_name}!
+You have {gold} gold and {health} health.

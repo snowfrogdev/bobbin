@@ -57,6 +57,54 @@ fn save_basic() {
     );
 }
 
+#[test]
+fn save_types() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/save/types.bobbin"),
+        "basic",
+    );
+}
+
+#[test]
+fn save_multiple() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/save/multiple.bobbin"),
+        "basic",
+    );
+}
+
+#[test]
+fn save_assignment() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/save/assignment.bobbin"),
+        "basic",
+    );
+}
+
+#[test]
+fn save_in_choices_happy() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/save/in_choices.bobbin"),
+        "happy",
+    );
+}
+
+#[test]
+fn save_in_choices_sad() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/save/in_choices.bobbin"),
+        "sad",
+    );
+}
+
+#[test]
+fn save_mixed_with_temp() {
+    support::run_trace_test(
+        &support::cases_dir().join("variables/save/mixed_with_temp.bobbin"),
+        "basic",
+    );
+}
+
 // =============================================================================
 // Type-specific Interpolation
 // =============================================================================
@@ -197,4 +245,24 @@ fn errors_assignment_undefined() {
 #[test]
 fn errors_assignment_typo() {
     support::run_error_test(&support::cases_dir().join("variables/errors/assignment_typo.bobbin"));
+}
+
+#[test]
+fn errors_temp_shadows_save() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/temp_shadows_save.bobbin"));
+}
+
+#[test]
+fn errors_save_shadows_temp() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/save_shadows_temp.bobbin"));
+}
+
+#[test]
+fn errors_save_redeclaration() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/save_redeclaration.bobbin"));
+}
+
+#[test]
+fn errors_save_set_undefined() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/save_set_undefined.bobbin"));
 }

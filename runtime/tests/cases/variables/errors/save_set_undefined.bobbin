@@ -1,0 +1,2 @@
+set never_declared = 100
+The value is {never_declared}.

@@ -1,0 +1,9 @@
+save mood = "neutral"
+Your mood is {mood}.
+- Feel happy
+    set mood = "happy"
+    You feel {mood}!
+- Feel sad
+    set mood = "sad"
+    You feel {mood}...
+After the choice, your mood is {mood}.

@@ -1,0 +1,9 @@
+--- path: basic
+> Welcome, Hero!
+! has_more
+[advance]
+> You have 100 gold and 50 health.
+$ player_name = "Hero"
+$ gold = 100
+$ health = 50
+! done

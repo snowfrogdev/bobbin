@@ -1,0 +1,12 @@
+--- path: basic
+> The count is 42
+! has_more
+[advance]
+> Enabled: true
+! has_more
+[advance]
+> Rate: 3.14
+$ count = 42
+$ enabled = true
+$ rate = 3.14
+! done

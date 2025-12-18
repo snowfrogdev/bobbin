@@ -1,0 +1,6 @@
+save persistent_score = 100
+temp temporary_bonus = 50
+Your score is {persistent_score} with bonus {temporary_bonus}.
+set persistent_score = 150
+set temporary_bonus = 75
+Updated: {persistent_score} with bonus {temporary_bonus}.

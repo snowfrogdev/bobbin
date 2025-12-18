@@ -1,0 +1,3 @@
+save score = 100
+save score = 200
+Your score is {score}.

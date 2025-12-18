@@ -1,0 +1,6 @@
+save count = 42
+save enabled = true
+save rate = 3.14
+The count is {count}
+Enabled: {enabled}
+Rate: {rate}

@@ -1,0 +1,8 @@
+--- path: basic
+> Your score is 100 with bonus 50.
+$ persistent_score = 100
+! has_more
+[advance]
+> Updated: 150 with bonus 75.
+$ persistent_score = 150
+! done

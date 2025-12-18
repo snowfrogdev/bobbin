@@ -1,0 +1,27 @@
+--- path: happy
+> Your mood is neutral.
+! has_more
+[advance]
+? Feel happy | Feel sad
+[choice 0]
+> You feel happy!
+$ mood = "happy"
+! has_more
+[advance]
+> After the choice, your mood is happy.
+$ mood = "happy"
+! done
+
+--- path: sad
+> Your mood is neutral.
+! has_more
+[advance]
+? Feel happy | Feel sad
+[choice 1]
+> You feel sad...
+$ mood = "sad"
+! has_more
+[advance]
+> After the choice, your mood is sad.
+$ mood = "sad"
+! done

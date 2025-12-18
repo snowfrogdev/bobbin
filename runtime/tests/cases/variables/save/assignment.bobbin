@@ -1,0 +1,4 @@
+save reputation = 0
+Your reputation is {reputation}.
+set reputation = 10
+Your reputation is now {reputation}.

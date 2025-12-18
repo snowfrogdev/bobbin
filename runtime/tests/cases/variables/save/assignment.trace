@@ -1,0 +1,8 @@
+--- path: basic
+> Your reputation is 0.
+$ reputation = 0
+! has_more
+[advance]
+> Your reputation is now 10.
+$ reputation = 10
+! done
