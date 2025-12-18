@@ -41,18 +41,26 @@ impl SemanticError {
 }
 
 /// Symbol table built during semantic analysis.
-/// Maps each variable usage (by NodeId) to its stack slot index.
+/// Maps each variable usage (by NodeId) to its storage location.
 #[derive(Debug, Default)]
 pub struct SymbolTable {
-    /// Each declaration and reference NodeId -> stack slot
+    /// Temp variable bindings: NodeId -> stack slot
     pub bindings: HashMap<NodeId, usize>,
+    /// Save variable bindings: NodeId -> variable name
+    pub save_bindings: HashMap<NodeId, String>,
 }
 
-/// Information about a declared variable
+/// Information about a declared temp variable
 #[derive(Debug)]
 struct VarInfo {
     slot: usize,
     span: Span, // for error messages
+}
+
+/// Information about a declared save variable
+#[derive(Debug)]
+struct SaveVarInfo {
+    span: Span, // for error messages (no slot - uses external storage)
 }
 
 /// A lexical scope containing variable declarations
@@ -66,9 +74,15 @@ struct Scope {
 #[derive(Debug)]
 pub struct Resolver<'a> {
     ast: &'a Script,
+    /// Temp variable scopes (block-scoped)
     scopes: Vec<Scope>,
+    /// Save variables (file-global)
+    save_vars: HashMap<String, SaveVarInfo>,
     next_slot: usize,
+    /// Temp variable bindings: NodeId -> slot
     bindings: HashMap<NodeId, usize>,
+    /// Save variable bindings: NodeId -> name
+    save_bindings: HashMap<NodeId, String>,
     errors: Vec<SemanticError>,
 }
 
@@ -80,8 +94,10 @@ impl<'a> Resolver<'a> {
                 variables: HashMap::new(),
                 start_slot: 0,
             }], // Start with global scope
+            save_vars: HashMap::new(),
             next_slot: 0,
             bindings: HashMap::new(),
+            save_bindings: HashMap::new(),
             errors: Vec::new(),
         }
     }
@@ -95,6 +111,7 @@ impl<'a> Resolver<'a> {
         if self.errors.is_empty() {
             Ok(SymbolTable {
                 bindings: self.bindings,
+                save_bindings: self.save_bindings,
             })
         } else {
             Err(self.errors)
@@ -104,7 +121,10 @@ impl<'a> Resolver<'a> {
     fn resolve_stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::TempDecl(VarBindingData { id, name, span, .. }) => {
-                self.declare(*id, name, *span);
+                self.declare_temp(*id, name, *span);
+            }
+            Stmt::SaveDecl(VarBindingData { id, name, span, .. }) => {
+                self.declare_save(*id, name, *span);
             }
             Stmt::Assignment(VarBindingData { id, name, span, .. }) => {
                 self.resolve_reference(*id, name, *span);
@@ -155,8 +175,18 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    /// Declare a variable in the current (innermost) scope
-    fn declare(&mut self, id: NodeId, name: &str, span: Span) {
+    /// Declare a temp variable in the current (innermost) scope
+    fn declare_temp(&mut self, id: NodeId, name: &str, span: Span) {
+        // Check for conflict with save variables (file-global)
+        if let Some(save_info) = self.save_vars.get(name) {
+            self.errors.push(SemanticError::Shadowing {
+                name: name.to_string(),
+                span,
+                original: save_info.span,
+            });
+            return;
+        }
+
         // Check for shadowing - search outer scopes
         for scope in self.scopes.iter().rev().skip(1) {
             if let Some(var_info) = scope.variables.get(name) {
@@ -193,8 +223,41 @@ impl<'a> Resolver<'a> {
         self.bindings.insert(id, slot);
     }
 
-    /// Resolve a variable reference - search from innermost to outermost scope
+    /// Declare a save variable (file-global, uses external storage)
+    fn declare_save(&mut self, id: NodeId, name: &str, span: Span) {
+        // Check for conflict with existing save variable
+        if let Some(save_info) = self.save_vars.get(name) {
+            self.errors.push(SemanticError::Shadowing {
+                name: name.to_string(),
+                span,
+                original: save_info.span,
+            });
+            return;
+        }
+
+        // Check for conflict with any temp variable in any scope
+        for scope in &self.scopes {
+            if let Some(var_info) = scope.variables.get(name) {
+                self.errors.push(SemanticError::Shadowing {
+                    name: name.to_string(),
+                    span,
+                    original: var_info.span,
+                });
+                return;
+            }
+        }
+
+        // Register the save variable (file-global)
+        self.save_vars
+            .insert(name.to_string(), SaveVarInfo { span });
+
+        // Record binding for this declaration
+        self.save_bindings.insert(id, name.to_string());
+    }
+
+    /// Resolve a variable reference - search temp scopes then save variables
     fn resolve_reference(&mut self, id: NodeId, name: &str, span: Span) {
+        // Check temp scopes first (innermost to outermost)
         for scope in self.scopes.iter().rev() {
             if let Some(var_info) = scope.variables.get(name) {
                 // Record binding for this reference
@@ -202,6 +265,13 @@ impl<'a> Resolver<'a> {
                 return;
             }
         }
+
+        // Check save variables (file-global)
+        if self.save_vars.contains_key(name) {
+            self.save_bindings.insert(id, name.to_string());
+            return;
+        }
+
         // Not found in any scope
         self.errors.push(SemanticError::UndefinedVariable {
             name: name.to_string(),

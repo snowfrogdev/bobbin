@@ -1,4 +1,5 @@
 use crate::chunk::{Chunk, Instruction, Value};
+use crate::storage::VariableStorage;
 
 #[derive(Debug, Clone)]
 pub enum RuntimeError {
@@ -6,6 +7,8 @@ pub enum RuntimeError {
     NotAtChoice,
     /// Choice index out of bounds
     InvalidChoiceIndex { index: usize, count: usize },
+    /// Save variable not found in storage (storage may be corrupted or cleared)
+    MissingSaveVariable { name: String },
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -22,6 +25,13 @@ impl std::fmt::Display for RuntimeError {
                     f,
                     "choice index {} out of bounds (only {} choices)",
                     index, count
+                )
+            }
+            RuntimeError::MissingSaveVariable { name } => {
+                write!(
+                    f,
+                    "save variable '{}' not found in storage",
+                    name
                 )
             }
         }
@@ -70,7 +80,11 @@ impl VM {
 
     /// Continue execution after user selects a choice.
     /// Call this after `step()` returns `Choice`. The ip should be pointing at ChoiceSet.
-    pub(crate) fn select_and_continue(&mut self, index: usize) -> Result<StepResult, RuntimeError> {
+    pub(crate) fn select_and_continue(
+        &mut self,
+        index: usize,
+        storage: &mut dyn VariableStorage,
+    ) -> Result<StepResult, RuntimeError> {
         // Read ChoiceSet to get targets
         let instruction = self.chunk.code[self.ip].clone();
 
@@ -85,16 +99,16 @@ impl VM {
         }
 
         // Continue normal execution
-        Ok(self.run())
+        self.run(storage)
     }
 
     /// Execute until we hit a pause point (Line, Choice) or Done.
-    pub(crate) fn step(&mut self) -> StepResult {
-        self.run()
+    pub(crate) fn step(&mut self, storage: &mut dyn VariableStorage) -> Result<StepResult, RuntimeError> {
+        self.run(storage)
     }
 
     /// Core execution loop.
-    fn run(&mut self) -> StepResult {
+    fn run(&mut self, storage: &mut dyn VariableStorage) -> Result<StepResult, RuntimeError> {
         loop {
             let instruction = self.chunk.code[self.ip].clone();
             self.ip += 1;
@@ -125,7 +139,7 @@ impl VM {
                 Instruction::Line => {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
                     let text = value.to_string_value();
-                    return StepResult::Line(text);
+                    return Ok(StepResult::Line(text));
                 }
                 Instruction::ChoiceSet { count, .. } => {
                     // Pop choice texts from stack
@@ -138,14 +152,28 @@ impl VM {
                     choices.reverse();
                     // Back up ip so select_and_continue can read ChoiceSet for targets
                     self.ip -= 1;
-                    return StepResult::Choice(choices);
+                    return Ok(StepResult::Choice(choices));
                 }
                 Instruction::Jump { target } => {
                     self.ip = target;
                 }
+                Instruction::InitStorage { name } => {
+                    let value = self.stack.pop().expect("stack underflow: compiler bug");
+                    storage.initialize_if_absent(&name, value);
+                }
+                Instruction::GetStorage { name } => {
+                    match storage.get(&name) {
+                        Some(value) => self.stack.push(value),
+                        None => return Err(RuntimeError::MissingSaveVariable { name }),
+                    }
+                }
+                Instruction::SetStorage { name } => {
+                    let value = self.stack.pop().expect("stack underflow: compiler bug");
+                    storage.set(&name, value);
+                }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK
-                    return StepResult::Done;
+                    return Ok(StepResult::Done);
                 }
             }
         }

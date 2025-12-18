@@ -39,6 +39,33 @@ impl<'a> Compiler<'a> {
             .expect("binding not found: resolver bug")
     }
 
+    /// Look up the save variable name for a NodeId. Returns None if not a save variable.
+    fn get_save_name(&self, id: NodeId) -> Option<&str> {
+        self.symbols.save_bindings.get(&id).map(|s| s.as_str())
+    }
+
+    /// Emit instruction to read a variable (temp or save) and push onto stack.
+    fn emit_var_read(&mut self, id: NodeId, line: usize) {
+        if let Some(name) = self.get_save_name(id) {
+            self.chunk
+                .emit(Instruction::GetStorage { name: name.to_string() }, line);
+        } else {
+            let slot = self.get_slot(id);
+            self.chunk.emit(Instruction::GetLocal { slot }, line);
+        }
+    }
+
+    /// Emit instruction to write a value (already on stack) to a variable (temp or save).
+    fn emit_var_write(&mut self, id: NodeId, line: usize) {
+        if let Some(name) = self.get_save_name(id) {
+            self.chunk
+                .emit(Instruction::SetStorage { name: name.to_string() }, line);
+        } else {
+            let slot = self.get_slot(id);
+            self.chunk.emit(Instruction::SetLocal { slot }, line);
+        }
+    }
+
     fn compile_stmt(&mut self, stmt: &Stmt) {
         match stmt {
             Stmt::TempDecl(VarBindingData { value, span, .. }) => {
@@ -46,13 +73,20 @@ impl<'a> Compiler<'a> {
                 // The value lives at its assigned slot position (implicit from declaration order).
                 self.compile_literal(value, span.start);
             }
-            Stmt::Assignment(VarBindingData { id, value, span, .. }) => {
-                // Assignment modifies an existing variable's slot.
-                // Unlike TempDecl (where slot is implicit from stack position),
-                // here we explicitly look up the slot allocated during declaration.
-                let slot = self.get_slot(*id);
+            Stmt::SaveDecl(VarBindingData { name, value, span, .. }) => {
+                // Push initial value onto stack, then emit InitStorage.
+                // InitStorage uses "initialize if absent" semantics for save variables.
                 self.compile_literal(value, span.start);
-                self.chunk.emit(Instruction::SetLocal { slot }, span.start);
+                self.chunk.emit(
+                    Instruction::InitStorage { name: name.clone() },
+                    span.start,
+                );
+            }
+            Stmt::Assignment(VarBindingData { id, value, span, .. }) => {
+                // Assignment modifies an existing variable (temp or save).
+                // Push value, then emit appropriate write instruction.
+                self.compile_literal(value, span.start);
+                self.emit_var_write(*id, span.start);
             }
             Stmt::Line { parts, span } => {
                 self.compile_text_parts(parts, span.start);
@@ -140,8 +174,7 @@ impl<'a> Compiler<'a> {
                     self.chunk.emit(Instruction::Constant { index }, span.start);
                 }
                 TextPart::VarRef { id, span, .. } => {
-                    let slot = self.get_slot(*id);
-                    self.chunk.emit(Instruction::GetLocal { slot }, span.start);
+                    self.emit_var_read(*id, span.start);
                 }
             }
         }

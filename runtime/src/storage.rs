@@ -1,5 +1,7 @@
 //! Variable storage interface for dialogue globals.
 
+use std::collections::HashMap;
+
 use crate::Value;
 
 /// Storage interface for dialogue globals (`save` variables).
@@ -23,4 +25,43 @@ pub trait VariableStorage {
 
     /// Check if a variable exists in storage.
     fn contains(&self, name: &str) -> bool;
+}
+
+/// In-memory implementation of [`VariableStorage`] for testing and simple use cases.
+///
+/// This implementation stores all variables in a `HashMap`. It's suitable for:
+/// - Unit tests and integration tests
+/// - Simple games that don't need persistence
+/// - The default storage when no custom implementation is provided
+///
+/// For games that need save/load persistence, implement [`VariableStorage`]
+/// with your game's save system.
+#[derive(Debug, Default)]
+pub struct MemoryStorage {
+    values: HashMap<String, Value>,
+}
+
+impl MemoryStorage {
+    /// Create a new empty storage.
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl VariableStorage for MemoryStorage {
+    fn get(&self, name: &str) -> Option<Value> {
+        self.values.get(name).cloned()
+    }
+
+    fn set(&mut self, name: &str, value: Value) {
+        self.values.insert(name.to_string(), value);
+    }
+
+    fn initialize_if_absent(&mut self, name: &str, default: Value) {
+        self.values.entry(name.to_string()).or_insert(default);
+    }
+
+    fn contains(&self, name: &str) -> bool {
+        self.values.contains_key(name)
+    }
 }

@@ -26,10 +26,23 @@ pub enum Instruction {
     Jump {
         target: usize,
     },
+    /// Initialize a save variable only if it doesn't exist in storage.
+    /// Pops value from stack, calls storage.initialize_if_absent(name, value).
+    InitStorage {
+        name: String,
+    },
+    /// Read a save variable from storage and push onto stack.
+    GetStorage {
+        name: String,
+    },
+    /// Pop value from stack and write to save variable in storage.
+    SetStorage {
+        name: String,
+    },
     Return,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Value {
     String(String),
     Number(f64),

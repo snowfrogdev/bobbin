@@ -77,6 +77,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         match self.tokens.peek() {
             Some(Ok(t)) => match t.kind {
                 TokenKind::Temp => Some(self.temp_declaration()),
+                TokenKind::Save => Some(self.save_declaration()),
                 TokenKind::Set => Some(self.assignment()),
                 TokenKind::TextSegment | TokenKind::OpenBrace => Some(self.line_statement()),
                 TokenKind::Choice => Some(self.choice_set()),
@@ -141,6 +142,13 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         let start_token = self.advance(); // Consume 'temp'
         let data = self.parse_var_binding("temp", start_token.span.start);
         Stmt::TempDecl(data)
+    }
+
+    /// Parse a save declaration: save name = value
+    fn save_declaration(&mut self) -> Stmt {
+        let start_token = self.advance(); // Consume 'save'
+        let data = self.parse_var_binding("save", start_token.span.start);
+        Stmt::SaveDecl(data)
     }
 
     /// Parse an assignment: set name = value

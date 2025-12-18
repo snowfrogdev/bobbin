@@ -8,7 +8,7 @@ use crate::vm::{StepResult, VM};
 
 pub use crate::vm::RuntimeError;
 pub use crate::chunk::Value;
-pub use crate::storage::VariableStorage;
+pub use crate::storage::{MemoryStorage, VariableStorage};
 
 mod ast;
 mod chunk;
@@ -25,6 +25,7 @@ pub enum BobbinError {
     Parse(Vec<ParseError>),
     Semantic(Vec<SemanticError>),
     Compile(CompileError),
+    Runtime(RuntimeError),
 }
 
 impl From<Vec<ParseError>> for BobbinError {
@@ -45,6 +46,12 @@ impl From<CompileError> for BobbinError {
     }
 }
 
+impl From<RuntimeError> for BobbinError {
+    fn from(err: RuntimeError) -> Self {
+        BobbinError::Runtime(err)
+    }
+}
+
 impl fmt::Display for BobbinError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -56,6 +63,9 @@ impl fmt::Display for BobbinError {
             }
             BobbinError::Compile(err) => {
                 write!(f, "compile error: {:?}", err)
+            }
+            BobbinError::Runtime(err) => {
+                write!(f, "runtime error: {}", err)
             }
         }
     }
@@ -76,12 +86,14 @@ impl BobbinError {
                 .collect::<Vec<_>>()
                 .join("\n"),
             BobbinError::Compile(err) => format!("compile error: {:?}", err),
+            BobbinError::Runtime(err) => format!("runtime error: {}", err),
         }
     }
 }
 
 pub struct Runtime {
     vm: VM,
+    storage: Box<dyn VariableStorage>,
     source: String,
     current_line: Option<String>,
     current_choices: Option<Vec<String>>,
@@ -89,7 +101,23 @@ pub struct Runtime {
 }
 
 impl Runtime {
+    /// Create a new runtime with default in-memory storage.
+    ///
+    /// This is suitable for testing and simple games that don't need persistence.
+    /// For games that need save/load support, use [`with_storage`](Self::with_storage).
     pub fn new(script: &str) -> Result<Self, BobbinError> {
+        Self::with_storage(script, Box::new(MemoryStorage::new()))
+    }
+
+    /// Create a new runtime with custom storage.
+    ///
+    /// Use this when you need dialogue state to persist across save/load cycles.
+    /// The game provides a [`VariableStorage`] implementation that integrates
+    /// with its save system.
+    pub fn with_storage(
+        script: &str,
+        storage: Box<dyn VariableStorage>,
+    ) -> Result<Self, BobbinError> {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
         let symbols = Resolver::new(&ast).analyze()?;
@@ -97,26 +125,37 @@ impl Runtime {
 
         let mut runtime = Self {
             vm: VM::new(chunk),
+            storage,
             source: script.to_string(),
             current_line: None,
             current_choices: None,
             is_done: false,
         };
-        runtime.step_vm();
+        runtime.step_vm()?;
         Ok(runtime)
     }
 
     pub fn current_line(&self) -> &str {
         self.current_line.as_deref().unwrap_or("")
     }
+
     pub fn current_choices(&self) -> &[String] {
         self.current_choices.as_deref().unwrap_or(&[])
     }
 
-    pub fn advance(&mut self) {
+    /// Access the storage for inspection (useful for testing and debugging).
+    pub fn storage(&self) -> &dyn VariableStorage {
+        &*self.storage
+    }
+
+    /// Advance to the next line of dialogue.
+    ///
+    /// Returns an error if a runtime error occurs (e.g., missing save variable).
+    pub fn advance(&mut self) -> Result<(), RuntimeError> {
         if !self.is_done {
-            self.step_vm();
+            self.step_vm()?;
         }
+        Ok(())
     }
 
     pub fn has_more(&self) -> bool {
@@ -130,15 +169,16 @@ impl Runtime {
     pub fn select_choice(&mut self, index: usize) -> Result<(), RuntimeError> {
         if self.current_choices.is_some() {
             self.current_choices = None;
-            let result = self.vm.select_and_continue(index)?;
+            let result = self.vm.select_and_continue(index, &mut *self.storage)?;
             self.handle_step_result(result);
         }
         Ok(())
     }
 
-    fn step_vm(&mut self) {
-        let result = self.vm.step();
+    fn step_vm(&mut self) -> Result<(), RuntimeError> {
+        let result = self.vm.step(&mut *self.storage)?;
         self.handle_step_result(result);
+        Ok(())
     }
 
     fn handle_step_result(&mut self, result: StepResult) {

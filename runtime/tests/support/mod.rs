@@ -82,7 +82,9 @@ pub fn run_output_test(case_path: &Path) {
         if !runtime.has_more() {
             break;
         }
-        runtime.advance();
+        runtime.advance().unwrap_or_else(|e| {
+            panic!("Runtime error in {}: {}", case_path.display(), e)
+        });
     }
 
     // Compare
@@ -409,17 +411,17 @@ fn execute_assertion(
             );
         }
         Assertion::StorageVar { name, value } => {
-            // TODO: Once Runtime exposes storage, change to:
-            // let actual = runtime.storage().get(name);
-            // assert_eq!(actual, Some(value.clone()), ...);
-            panic!(
-                "Storage assertion not yet supported at step {} in {} (path: {}): {} = {:?}. \
-                 Runtime needs to expose storage() method.",
+            let actual = runtime.storage().get(name);
+            assert_eq!(
+                actual,
+                Some(value.clone()),
+                "Storage variable mismatch at step {} in {} (path: {})\nVariable: {}\nExpected: {:?}\nActual: {:?}",
                 step_idx,
                 case_path.display(),
                 path_name,
                 name,
-                value
+                Some(value.clone()),
+                actual
             );
         }
     }
@@ -434,12 +436,20 @@ fn execute_action(
 ) {
     match action {
         Action::Advance => {
-            runtime.advance();
+            runtime.advance().unwrap_or_else(|e| {
+                panic!(
+                    "advance() failed at step {} in {} (path: {}): {}",
+                    step_idx,
+                    case_path.display(),
+                    path_name,
+                    e
+                )
+            });
         }
         Action::SelectChoice(idx) => {
             runtime.select_choice(*idx).unwrap_or_else(|e| {
                 panic!(
-                    "select_choice({}) failed at step {} in {} (path: {}): {:?}",
+                    "select_choice({}) failed at step {} in {} (path: {}): {}",
                     idx,
                     step_idx,
                     case_path.display(),

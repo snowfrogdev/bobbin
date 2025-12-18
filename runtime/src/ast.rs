@@ -17,6 +17,7 @@ pub enum Stmt {
         span: Span,
     },
     TempDecl(VarBindingData),
+    SaveDecl(VarBindingData),
     Assignment(VarBindingData),
     ChoiceSet {
         choices: Vec<Choice>,
