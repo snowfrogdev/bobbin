@@ -170,3 +170,4 @@ Bobbin automatically tracks visit counts for choice sets. This is stored as part
 
 - ADR-0001: Compiler Architecture (establishes the bytecode VM that executes with this state model)
 - ADR-0003: Variable Modification Syntax (covers `set` keyword for modifying variables)
+- ADR-0004: Variable Storage Architecture (refines the storage interfaces and type system)
