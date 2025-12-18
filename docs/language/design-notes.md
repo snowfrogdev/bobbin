@@ -24,7 +24,7 @@ else:
 
 ### Type System
 
-**Decision**: Dynamic typing with runtime coercion at host boundaries.
+**Decision**: Hybrid static/dynamic typing based on variable category.
 
 Bobbin supports these internal types:
 - `bool` - true/false
@@ -33,12 +33,27 @@ Bobbin supports these internal types:
 - `string` - text
 - `table` - key-value pairs (syntax TBD)
 
-Type checking happens at runtime. When values cross the boundary between Bobbin and the host engine (Godot, Unity, etc.), Bobbin performs type coercion as needed.
+Type checking varies by variable category:
+
+| Category | Keyword | Typing | Checking |
+|----------|---------|--------|----------|
+| Temporaries | `temp` | Static | Compile-time |
+| Dialogue globals | `save` | Static | Compile-time + runtime verification |
+| Game variables | (none) | Dynamic | Runtime only |
+
+**Temporary variables** (`temp`) are fully statically typed. The compiler infers the type from the initial value and catches type mismatches at compile time.
+
+**Dialogue globals** (`save`) have static typing with runtime verification. The declared type is checked at compile time, and the runtime verifies that values retrieved from storage match the expected type. If the storage returns a value of the wrong type, that's a runtime error.
+
+**Game variables** are dynamically typed. Since the game provides these values at runtime, Bobbin cannot know their types until lookup. Type mismatches in expressions are runtime errors.
 
 **Rationale**:
-- Dynamic typing reduces friction for narrative designers
-- Mandatory type declarations add verbosity without proportional benefit for a dialogue DSL
-- Cross-engine compatibility is simpler when Bobbin handles type mapping internally
+- Static typing for `temp` and `save` catches most errors at compile time
+- Runtime verification at the storage boundary handles the reality that storage is external
+- Dynamic typing for game variables is necessary since types are unknown until runtime
+- This balance maximizes error detection while remaining practical
+
+See ADR-0004 for the full architecture.
 
 ### Global Initialization Semantics
 
@@ -166,6 +181,18 @@ Note: Basic interpolation syntax (`{var}` and `{{` escape) is decided - see "Dec
 - Export syntax needed?
 - Circular dependency handling?
 
+### Dialogue-to-Game Effects (Commands)
+
+**Context**: Dialogue may need to trigger game effects (give items, complete quests, play sounds). Direct writes to game variables would bypass game logic, so a command/event system is preferred.
+
+**Questions**:
+- Command syntax: function-style `give_gold(100)` or keyword-style `command give_gold 100`?
+- How are commands registered by the game?
+- Return values from commands?
+- Error handling for unknown commands?
+
+See ADR-0004 for the architectural rationale.
+
 ## Implementation Notes
 
 ### Scanner Token Types
@@ -192,13 +219,31 @@ pub enum Value {
 }
 ```
 
-### VariableStorage Interface
+### VariableStorage Interface (Dialogue Globals)
 
 ```rust
 pub trait VariableStorage {
+    /// Get the current value of a dialogue global
     fn get(&self, name: &str) -> Option<Value>;
+
+    /// Set a dialogue global to a new value
     fn set(&mut self, name: &str, value: Value);
+
+    /// Initialize only if absent (for `save` declarations)
+    fn initialize_if_absent(&mut self, name: &str, default: Value);
+
+    /// Check if a variable exists
     fn contains(&self, name: &str) -> bool;
-    fn keys(&self) -> Vec<String>;
 }
 ```
+
+### GameState Interface (Game Variables)
+
+```rust
+pub trait GameState {
+    /// Look up a game variable (read-only from Bobbin's perspective)
+    fn lookup(&self, name: &str) -> Option<Value>;
+}
+```
+
+See ADR-0004 for the rationale behind two separate interfaces.

@@ -55,13 +55,27 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - `save` declares a persistent dialogue global (survives save/load)
 - `temp` declares a temporary variable (exists only during execution)
 - Both require an initial value
+- Both are statically typed: the type is inferred from the initial value
+- `temp` types are checked at compile time only
+- `save` types are checked at compile time and verified at runtime when reading from storage
 - See ADR-0002 for the state management architecture
+- See ADR-0004 for the type system and storage architecture
 
 ### Assignments
 
 - `set` modifies an existing variable
 - The variable must be declared (`save` or `temp`) or provided by the game
+- Assigning to `temp` or `save` variables is type-checked at compile time
+- Assigning to game variables is not currently supported (use commands instead)
 - See ADR-0003 for the syntax decision rationale
+
+### Game Variables
+
+- Game variables are provided by the host engine via the `GameState` interface
+- They are read-only from Bobbin's perspective
+- They are dynamically typed (type discovered at runtime)
+- No declaration syntax; they're accessed by name in interpolations and expressions
+- See ADR-0004 for the two-interface architecture
 
 ### Choices
 
@@ -93,3 +107,4 @@ The following syntax elements are planned but not yet specified:
 - **Tables**: Literal syntax, access syntax, methods
 - **Interpolation expressions**: Expressions beyond variable names inside `{...}`
 - **Imports**: Module system syntax
+- **Commands**: Syntax for triggering game effects (giving items, playing sounds, etc.)
