@@ -57,9 +57,7 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - `save` declares a persistent dialogue global (survives save/load)
 - `temp` declares a temporary variable (exists only during execution)
 - Both require an initial value
-- Both are statically typed: the type is inferred from the initial value
-- `temp` types are checked at compile time only
-- `save` types are checked at compile time and verified at runtime when reading from storage
+- Type is inferred from the initial value
 - See ADR-0002 for the state management architecture
 - See ADR-0004 for the type system and storage architecture
 
@@ -78,7 +76,6 @@ text_char     = ? any character except "{", "}", and newline ? ;
 
 - `set` modifies an existing variable
 - The variable must be declared with `save` or `temp`
-- Assigning to `temp` or `save` variables is type-checked at compile time
 - Assigning to `extern` variables is a semantic error (they are read-only)
 - See ADR-0003 for the syntax decision rationale
 
