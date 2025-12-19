@@ -40,3 +40,8 @@ fn errors_set_missing_equals() {
 fn errors_set_missing_value() {
     support::run_error_test(&support::cases_dir().join("syntax/errors/set_missing_value.bobbin"));
 }
+
+#[test]
+fn errors_invalid_declaration_character() {
+    support::run_error_test(&support::cases_dir().join("syntax/errors/invalid_declaration_character.bobbin"));
+}

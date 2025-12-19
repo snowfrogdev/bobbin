@@ -192,6 +192,8 @@ impl<'a> Scanner<'a> {
             return self.scan_identifier_or_keyword();
         }
 
+        // Error recovery: advance past the invalid character to avoid infinite loop
+        self.advance();
         Err(self.error("Unexpected character in declaration"))
     }
 
@@ -210,6 +212,8 @@ impl<'a> Scanner<'a> {
             return self.scan_identifier();
         }
 
+        // Error recovery: advance past the invalid character to avoid infinite loop
+        self.advance();
         Err(self.error("Expected identifier after 'extern'"))
     }
 
