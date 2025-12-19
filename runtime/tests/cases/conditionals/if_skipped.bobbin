@@ -1,0 +1,6 @@
+temp is_happy = false
+
+if is_happy:
+    I am happy!
+
+Done.
