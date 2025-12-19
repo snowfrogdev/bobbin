@@ -157,25 +157,35 @@ To show braces: {{like this}}
 
 **Phase 1 scope**: Only variable names are allowed inside `{...}`. Arithmetic expressions and function calls are TBD for a future phase.
 
+### Conditional System
+
+**Decision**: Python-style `if/elif/else` with indentation blocks. See ADR-0005 for full details.
+
+Key decisions:
+
+- Block structure: Indentation-based with `elif` keyword
+- Expression operators: C-style comparisons (`==`, `!=`, `<`, `>`) with word-based logic (`and`, `or`, `not`)
+- Truthiness: Only `false` is falsy (0 and "" are truthy)
+- Type comparison: Strict, no coercion
+- Conditional choices: `- {condition} Text` syntax; host decides unavailable choice presentation
+
+**Example:**
+
+```bobbin
+if gold >= 100:
+    You're wealthy!
+elif gold >= 10:
+    You have some money.
+else:
+    You're broke.
+
+- {gold >= 10} Buy potion
+- Leave
+```
+
 ## To Be Decided
 
 The following design decisions need to be made before implementation:
-
-### Expression Syntax
-
-**Questions**:
-- Operator symbols: `and`/`or`/`not` vs `&&`/`||`/`!`?
-- Operator precedence?
-- Parentheses for grouping?
-- String concatenation operator?
-
-### Conditional Syntax
-
-**Questions**:
-- `if`/`else` or `if`/`elif`/`else`?
-- Indentation-based blocks (Python-style)?
-- Condition syntax: `if condition:` or `if (condition)`?
-- How do conditionals interact with choices?
 
 ### Table Syntax
 
@@ -192,9 +202,8 @@ The following design decisions need to be made before implementation:
 - What expressions beyond variable names should be allowed inside `{...}`?
 - Arithmetic: `{gold * 2}`?
 - Function calls: `{get_title(npc)}`?
-- Inline conditionals: `{if gold > 0 then "some" else "no"}`?
 
-Note: Basic interpolation syntax (`{var}` and `{{` escape) is decided - see "Decided" section above.
+Note: Basic interpolation syntax (`{var}` and `{{` escape) is decided. Inline conditional text (`{gold > 0: "some" | "no"}`) is deferred - use separate conditional lines for now.
 
 ### Compound Assignment
 
@@ -220,6 +229,26 @@ Note: Basic interpolation syntax (`{var}` and `{{` escape) is decided - see "Dec
 - Error handling for unknown commands?
 
 See ADR-0004 for the architectural rationale.
+
+### Visit Count Syntax
+
+**Context**: ADR-0005 decided that visit counts should be integrated with conditions, but the exact syntax is deferred until visit tracking is implemented.
+
+**Questions**:
+
+- Function-style: `if visited(tavern_scene):`?
+- Property-style: `if tavern_scene.visits > 0:`?
+- Implicit naming: How are choice sets identified?
+
+### Switch/Case Statements
+
+**Status**: Deferred. `if/elif/else` is sufficient for now.
+
+**Questions** (if implemented later):
+
+- Syntax: `switch value:` with indented cases?
+- Fall-through behavior?
+- Pattern matching (ranges like `1..10`)?
 
 ## Implementation Notes
 
