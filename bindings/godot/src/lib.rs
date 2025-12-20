@@ -59,12 +59,12 @@ impl VariableStorage for MemoryStorage {
 
 /// Host state implementation backed by a HashMap.
 /// Thread-safe via RwLock. Game can update values at any time.
-struct DictionaryHostState {
+struct VarDictionaryHostState {
     values: RwLock<HashMap<String, Value>>,
 }
 
-impl DictionaryHostState {
-    fn from_dictionary(dict: &Dictionary) -> Self {
+impl VarDictionaryHostState {
+    fn from_dictionary(dict: &VarDictionary) -> Self {
         let mut values = HashMap::new();
         for key in dict.keys_array().iter_shared() {
             if let Ok(name) = key.try_to::<GString>() {
@@ -86,18 +86,9 @@ impl DictionaryHostState {
     }
 }
 
-impl HostState for DictionaryHostState {
+impl HostState for VarDictionaryHostState {
     fn lookup(&self, name: &str) -> Option<Value> {
         self.values.read().unwrap().get(name).cloned()
-    }
-}
-
-/// Empty host state that provides no variables.
-struct EmptyHostState;
-
-impl HostState for EmptyHostState {
-    fn lookup(&self, _name: &str) -> Option<Value> {
-        None
     }
 }
 
@@ -224,7 +215,7 @@ impl IScriptLanguageExtension for BobbinLanguage {
         });
         Some(script.upcast())
     }
-    fn get_built_in_templates(&self, _object: StringName) -> Array<Dictionary> {
+    fn get_built_in_templates(&self, _object: StringName) -> Array<VarDictionary> {
         Array::new()
     }
     fn is_using_templates(&mut self) -> bool {
@@ -273,8 +264,8 @@ impl IScriptLanguageExtension for BobbinLanguage {
         _validate_errors: bool,
         _validate_warnings: bool,
         _validate_safe_lines: bool,
-    ) -> Dictionary {
-        let mut dict = Dictionary::new();
+    ) -> VarDictionary {
+        let mut dict = VarDictionary::new();
         dict.set("valid", true);
         dict
     }
@@ -297,8 +288,8 @@ impl IScriptLanguageExtension for BobbinLanguage {
         _code: GString,
         _path: GString,
         _owner: Option<Gd<Object>>,
-    ) -> Dictionary {
-        let mut dict = Dictionary::new();
+    ) -> VarDictionary {
+        let mut dict = VarDictionary::new();
         dict.set("result", 0i32); // CodeCompletionKind::NONE
         dict.set("call_hint", GString::new());
         dict.set("force", false);
@@ -310,9 +301,9 @@ impl IScriptLanguageExtension for BobbinLanguage {
         _symbol: GString,
         _path: GString,
         _owner: Option<Gd<Object>>,
-    ) -> Dictionary {
+    ) -> VarDictionary {
         // Godot 4.3 requires all six keys to be present
-        let mut dict = Dictionary::new();
+        let mut dict = VarDictionary::new();
         dict.set("result", 7i32); // Error::ERR_UNAVAILABLE = 7 (no result found)
         dict.set("type", 0i32); // LOOKUP_RESULT_SCRIPT_LOCATION
         dict.set("script", Variant::nil());
@@ -364,16 +355,16 @@ impl IScriptLanguageExtension for BobbinLanguage {
         _level: i32,
         _max_subitems: i32,
         _max_depth: i32,
-    ) -> Dictionary {
-        Dictionary::new()
+    ) -> VarDictionary {
+        VarDictionary::new()
     }
     fn debug_get_stack_level_members(
         &mut self,
         _level: i32,
         _max_subitems: i32,
         _max_depth: i32,
-    ) -> Dictionary {
-        Dictionary::new()
+    ) -> VarDictionary {
+        VarDictionary::new()
     }
     unsafe fn debug_get_stack_level_instance_rawptr(
         &mut self,
@@ -381,8 +372,8 @@ impl IScriptLanguageExtension for BobbinLanguage {
     ) -> RawPtr<*mut std::ffi::c_void> {
         unsafe { RawPtr::new(std::ptr::null_mut()) }
     }
-    fn debug_get_globals(&mut self, _max_subitems: i32, _max_depth: i32) -> Dictionary {
-        Dictionary::new()
+    fn debug_get_globals(&mut self, _max_subitems: i32, _max_depth: i32) -> VarDictionary {
+        VarDictionary::new()
     }
     fn debug_parse_stack_level_expression(
         &mut self,
@@ -393,7 +384,7 @@ impl IScriptLanguageExtension for BobbinLanguage {
     ) -> GString {
         GString::new()
     }
-    fn debug_get_current_stack_info(&mut self) -> Array<Dictionary> {
+    fn debug_get_current_stack_info(&mut self) -> Array<VarDictionary> {
         Array::new()
     }
 
@@ -410,13 +401,13 @@ impl IScriptLanguageExtension for BobbinLanguage {
     }
 
     // --- Public API info ---
-    fn get_public_functions(&self) -> Array<Dictionary> {
+    fn get_public_functions(&self) -> Array<VarDictionary> {
         Array::new()
     }
-    fn get_public_constants(&self) -> Dictionary {
-        Dictionary::new()
+    fn get_public_constants(&self) -> VarDictionary {
+        VarDictionary::new()
     }
-    fn get_public_annotations(&self) -> Array<Dictionary> {
+    fn get_public_annotations(&self) -> Array<VarDictionary> {
         Array::new()
     }
 
@@ -443,8 +434,8 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn handles_global_class_type(&self, type_: GString) -> bool {
         type_ == GString::from("BobbinScript")
     }
-    fn get_global_class_name(&self, _path: GString) -> Dictionary {
-        Dictionary::new()
+    fn get_global_class_name(&self, _path: GString) -> VarDictionary {
+        VarDictionary::new()
     }
 }
 
@@ -537,7 +528,7 @@ impl IScriptExtension for BobbinScript {
     fn update_exports(&mut self) {}
 
     // --- Documentation ---
-    fn get_documentation(&self) -> Array<Dictionary> {
+    fn get_documentation(&self) -> Array<VarDictionary> {
         Array::new()
     }
 
@@ -548,10 +539,10 @@ impl IScriptExtension for BobbinScript {
     fn has_static_method(&self, _method: StringName) -> bool {
         false
     }
-    fn get_method_info(&self, _method: StringName) -> Dictionary {
-        Dictionary::new()
+    fn get_method_info(&self, _method: StringName) -> VarDictionary {
+        VarDictionary::new()
     }
-    fn get_script_method_list(&self) -> Array<Dictionary> {
+    fn get_script_method_list(&self) -> Array<VarDictionary> {
         Array::new()
     }
 
@@ -562,14 +553,14 @@ impl IScriptExtension for BobbinScript {
     fn get_property_default_value(&self, _property: StringName) -> Variant {
         Variant::nil()
     }
-    fn get_script_property_list(&self) -> Array<Dictionary> {
+    fn get_script_property_list(&self) -> Array<VarDictionary> {
         Array::new()
     }
     fn get_member_line(&self, _member: StringName) -> i32 {
         -1
     }
-    fn get_constants(&self) -> Dictionary {
-        Dictionary::new()
+    fn get_constants(&self) -> VarDictionary {
+        VarDictionary::new()
     }
     fn get_members(&self) -> Array<StringName> {
         Array::new()
@@ -579,7 +570,7 @@ impl IScriptExtension for BobbinScript {
     fn has_script_signal(&self, _signal: StringName) -> bool {
         false
     }
-    fn get_script_signal_list(&self) -> Array<Dictionary> {
+    fn get_script_signal_list(&self) -> Array<VarDictionary> {
         Array::new()
     }
 
@@ -762,7 +753,7 @@ impl IResourceFormatSaver for BobbinSaver {
 pub struct BobbinRuntime {
     base: Base<RefCounted>,
     storage: Arc<MemoryStorage>,
-    host: Arc<DictionaryHostState>,
+    host: Arc<VarDictionaryHostState>,
     inner: Runtime,
 }
 
@@ -772,14 +763,14 @@ impl BobbinRuntime {
     #[func]
     fn from_string(content: GString) -> Option<Gd<Self>> {
         // Use empty host state (no extern variables)
-        Self::from_string_with_host(content, Dictionary::new())
+        Self::from_string_with_host(content, VarDictionary::new())
     }
 
-    /// Create runtime with host state Dictionary.
+    /// Create runtime with host state VarDictionary.
     #[func]
-    fn from_string_with_host(content: GString, host_state: Dictionary) -> Option<Gd<Self>> {
+    fn from_string_with_host(content: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
         let storage = Arc::new(MemoryStorage::new());
-        let host = Arc::new(DictionaryHostState::from_dictionary(&host_state));
+        let host = Arc::new(VarDictionaryHostState::from_dictionary(&host_state));
 
         let storage_dyn: Arc<dyn VariableStorage> = storage.clone();
         let host_dyn: Arc<dyn HostState> = host.clone();
@@ -854,10 +845,10 @@ impl BobbinRuntime {
         }
     }
 
-    /// Get all save variables as Dictionary.
+    /// Get all save variables as VarDictionary.
     #[func]
-    fn get_all_variables(&self) -> Dictionary {
-        let mut dict = Dictionary::new();
+    fn get_all_variables(&self) -> VarDictionary {
+        let mut dict = VarDictionary::new();
         for (key, value) in self.storage.get_all() {
             dict.set(GString::from(key.as_str()), value_to_variant(&value));
         }
