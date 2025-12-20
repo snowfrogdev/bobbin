@@ -149,6 +149,35 @@ undefined
 name
 ```
 
+## Releasing
+
+### Godot Addon
+
+Releases are automated via GitHub Actions. There are two ways to trigger a release:
+
+**Option 1: Tag push (recommended)**
+
+```bash
+# Update version in bindings/godot/Cargo.toml, then:
+git tag godot-addon-v1.0.0
+git push origin godot-addon-v1.0.0
+```
+
+**Option 2: Manual dispatch**
+
+1. Go to Actions → "Release Godot Addon"
+2. Click "Run workflow"
+3. Enter the version (e.g., `1.0.0`)
+4. Click "Run workflow"
+
+The workflow builds for Windows, Linux, and WASM, then creates a GitHub Release with the addon zip attached.
+
+### Version Conventions
+
+- Use semantic versioning: `MAJOR.MINOR.PATCH`
+- Tag format: `{component}-v{version}` (e.g., `godot-addon-v1.0.0`)
+- Each distributable is versioned independently
+
 ## Before you submit
 
 By submitting a pull request, you agree that:
