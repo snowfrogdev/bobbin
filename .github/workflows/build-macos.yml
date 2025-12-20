@@ -29,11 +29,28 @@ jobs:
       - name: Build debug
         run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml
 
+      - name: Find built libraries
+        id: find-libs
+        run: |
+          echo "=== Current directory ==="
+          pwd
+          echo "=== Finding all .dylib files ==="
+          find . -name "*.dylib" -type f 2>/dev/null
+          echo "=== Checking target directory structure ==="
+          ls -la target/ 2>/dev/null || echo "No target/ directory"
+          ls -la target/release/ 2>/dev/null || echo "No target/release/ directory"
+          ls -la target/debug/ 2>/dev/null || echo "No target/debug/ directory"
+
       - name: Copy binaries
         run: |
           mkdir -p bindings/godot/addons/bobbin/bin
-          cp target/release/libbobbin_godot.dylib bindings/godot/addons/bobbin/bin/libbobbin_godot.dylib
-          cp target/debug/libbobbin_godot.dylib bindings/godot/addons/bobbin/bin/libbobbin_godot.debug.dylib
+          # Find the actual location of the dylib files
+          RELEASE_LIB=$(find . -name "libbobbin_godot.dylib" -path "*/release/*" -type f | head -1)
+          DEBUG_LIB=$(find . -name "libbobbin_godot.dylib" -path "*/debug/*" -type f | head -1)
+          echo "Release lib: $RELEASE_LIB"
+          echo "Debug lib: $DEBUG_LIB"
+          cp "$RELEASE_LIB" bindings/godot/addons/bobbin/bin/libbobbin_godot.dylib
+          cp "$DEBUG_LIB" bindings/godot/addons/bobbin/bin/libbobbin_godot.debug.dylib
 
       - name: Upload macOS binaries
         uses: actions/upload-artifact@v4
