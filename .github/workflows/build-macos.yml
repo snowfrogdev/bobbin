@@ -29,15 +29,6 @@ jobs:
       - name: Build debug
         run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml
 
-      - name: List build outputs
-        run: |
-          echo "=== Looking for .dylib files ==="
-          find . -name "*.dylib" -type f 2>/dev/null || true
-          echo "=== target/release contents ==="
-          ls -la target/release/ 2>/dev/null | head -20 || echo "Directory not found"
-          echo "=== target/debug contents ==="
-          ls -la target/debug/ 2>/dev/null | head -20 || echo "Directory not found"
-
       - name: Copy binaries
         run: |
           mkdir -p bindings/godot/addons/bobbin/bin
