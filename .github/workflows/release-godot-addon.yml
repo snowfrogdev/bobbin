@@ -10,7 +10,7 @@ on:
         required: true
 
 jobs:
-  build:
+  build-docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,15 +27,56 @@ jobs:
           name: godot-addon
           path: bindings/godot/addons/
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.3
+        run: |
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          unzip godot.zip
+          echo "GODOT4_BIN=${{ github.workspace }}/Godot.app/Contents/MacOS/Godot" >> $GITHUB_ENV
+
+      - name: Install Rust nightly
+        run: |
+          rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly
+
+      - name: Build release
+        run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml --release
+
+      - name: Build debug
+        run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml
+
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: |
+            target/release/libbobbin_godot.dylib
+            target/debug/libbobbin_godot.dylib
+
   release:
-    needs: build
+    needs: [build-docker, build-macos]
     runs-on: ubuntu-latest
     steps:
-      - name: Download artifact
+      - name: Download addon artifact
         uses: actions/download-artifact@v4
         with:
           name: godot-addon
           path: addons/
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: macos-bin/
+
+      - name: Merge macOS binaries into addon
+        run: |
+          cp macos-bin/release/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.dylib
+          cp macos-bin/debug/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.debug.dylib
 
       - name: Determine version
         id: version

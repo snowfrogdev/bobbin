@@ -170,7 +170,7 @@ git push origin godot-addon-v1.0.0
 3. Enter the version (e.g., `1.0.0`)
 4. Click "Run workflow"
 
-The workflow builds for Windows, Linux, and WASM, then creates a GitHub Release with the addon zip attached.
+The workflow builds for Windows, Linux, macOS, and WASM, then creates a GitHub Release with the addon zip attached.
 
 ### Version Conventions
 

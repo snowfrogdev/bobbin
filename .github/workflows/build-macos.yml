@@ -1,0 +1,39 @@
+name: Build macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.3
+        run: |
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          unzip godot.zip
+          echo "GODOT4_BIN=${{ github.workspace }}/Godot.app/Contents/MacOS/Godot" >> $GITHUB_ENV
+
+      - name: Install Rust nightly
+        run: |
+          rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly
+
+      - name: Build release
+        run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml --release
+
+      - name: Build debug
+        run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml
+
+      - name: Copy binaries
+        run: |
+          mkdir -p bindings/godot/addons/bobbin/bin
+          cp target/release/libbobbin_godot.dylib bindings/godot/addons/bobbin/bin/libbobbin_godot.dylib
+          cp target/debug/libbobbin_godot.dylib bindings/godot/addons/bobbin/bin/libbobbin_godot.debug.dylib
+
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: bindings/godot/addons/bobbin/bin/*.dylib
