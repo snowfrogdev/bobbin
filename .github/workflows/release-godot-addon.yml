@@ -56,9 +56,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: macos-binaries
+          # Target is at bindings/godot/target/ (no workspace, so cargo uses manifest-relative path)
           path: |
-            target/release/libbobbin_godot.dylib
-            target/debug/libbobbin_godot.dylib
+            bindings/godot/target/release/libbobbin_godot.dylib
+            bindings/godot/target/debug/libbobbin_godot.dylib
 
   release:
     needs: [build-docker, build-macos]
@@ -78,8 +79,9 @@ jobs:
 
       - name: Merge macOS binaries into addon
         run: |
-          cp macos-bin/release/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.dylib
-          cp macos-bin/debug/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.debug.dylib
+          # Artifact preserves the path structure from upload
+          cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.dylib
+          cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.debug.dylib
 
       - name: Determine version
         id: version
