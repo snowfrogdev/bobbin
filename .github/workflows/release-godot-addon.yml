@@ -1,0 +1,58 @@
+name: Release Godot Addon
+
+on:
+  push:
+    tags: ['godot-addon-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 1.0.0)'
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t bobbin-build docker/
+
+      - name: Build all platforms
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build all release --ci
+
+      - name: Upload addon artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-addon
+          path: bindings/godot/addons/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-addon
+          path: addons/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF#refs/tags/godot-addon-v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create zip
+        run: zip -r bobbin-godot-addon-${{ steps.version.outputs.version }}.zip addons/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: godot-addon-v${{ steps.version.outputs.version }}
+          name: Bobbin Godot Addon v${{ steps.version.outputs.version }}
+          files: bobbin-godot-addon-${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true
