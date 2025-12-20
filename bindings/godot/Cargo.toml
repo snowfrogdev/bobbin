@@ -26,8 +26,20 @@ codegen-units = 1
 opt-level = "z"
 strip = true
 
+# Fast release builds (local dev)
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16
+
 [profile.dev]
 opt-level = 1
 debug = 1
 strip = "debuginfo"
 lto = "thin"
+
+# Fast debug builds (local dev)
+[profile.dev-fast]
+inherits = "dev"
+lto = false
+codegen-units = 16
