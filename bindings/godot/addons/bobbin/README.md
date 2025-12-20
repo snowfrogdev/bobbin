@@ -63,6 +63,16 @@ Web builds require **multi-threading support** enabled in your export settings. 
 
 In Godot's Export dialog, ensure "Thread Support" is enabled for your web export preset.
 
+## macOS
+
+macOS quarantines unsigned binaries downloaded from the internet. If Godot fails to load the addon, run this in Terminal from your project's `addons/bobbin/bin/` folder:
+
+```bash
+xattr -dr com.apple.quarantine *.dylib
+```
+
+This only affects developers during development. Games exported and properly signed for distribution will work without this step.
+
 ## License
 
 See LICENSE.md. Please credit "Bobbin dialogue system by Snowfrog Studio" in your game credits.
