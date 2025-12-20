@@ -20,6 +20,9 @@ jobs:
           rustup toolchain install nightly
           rustup component add rust-src --toolchain nightly
 
+      - name: Set LLVM path for bindgen
+        run: echo "LLVM_PATH=$(brew --prefix llvm)" >> $GITHUB_ENV
+
       - name: Build release
         run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml --release
 
