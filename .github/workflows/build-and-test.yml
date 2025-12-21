@@ -23,8 +23,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
-        run: docker build -t bobbin-build docker/
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build all platforms (Linux + Windows + WASM)
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build all release --ci
