@@ -8,7 +8,16 @@ on:
         value: godot-addon
 
 jobs:
+  test-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run runtime tests
+        run: cargo test -p bobbin-runtime
+
   build-docker:
+    needs: test-runtime
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +35,7 @@ jobs:
           path: bindings/godot/addons/
 
   build-macos:
+    needs: test-runtime
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
