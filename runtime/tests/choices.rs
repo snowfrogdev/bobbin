@@ -124,18 +124,12 @@ fn sequential_no_blue() {
 
 #[test]
 fn mixed_talk() {
-    support::run_trace_test(
-        &support::cases_dir().join("choices/mixed.bobbin"),
-        "talk",
-    );
+    support::run_trace_test(&support::cases_dir().join("choices/mixed.bobbin"), "talk");
 }
 
 #[test]
 fn mixed_leave() {
-    support::run_trace_test(
-        &support::cases_dir().join("choices/mixed.bobbin"),
-        "leave",
-    );
+    support::run_trace_test(&support::cases_dir().join("choices/mixed.bobbin"), "leave");
 }
 
 // =============================================================================
@@ -160,8 +154,5 @@ fn nested_talk_to_bob() {
 
 #[test]
 fn nested_leave() {
-    support::run_trace_test(
-        &support::cases_dir().join("choices/nested.bobbin"),
-        "leave",
-    );
+    support::run_trace_test(&support::cases_dir().join("choices/nested.bobbin"), "leave");
 }

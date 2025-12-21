@@ -161,7 +161,7 @@ fn extern_mixed_with_temp_and_save() {
 fn extern_missing_at_runtime() {
     // Test that using a declared extern variable that the host doesn't provide
     // results in a runtime error (MissingExternVariable)
-    use bobbin_runtime::{HostState, RuntimeError, Runtime, VariableStorage};
+    use bobbin_runtime::{HostState, Runtime, RuntimeError, VariableStorage};
     use std::sync::Arc;
     use support::{EmptyHostState, MemoryStorage};
 
@@ -317,7 +317,9 @@ fn errors_redeclaration() {
 
 #[test]
 fn errors_assignment_undefined() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/assignment_undefined.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/assignment_undefined.bobbin"),
+    );
 }
 
 #[test]
@@ -327,22 +329,30 @@ fn errors_assignment_typo() {
 
 #[test]
 fn errors_temp_shadows_save() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/temp_shadows_save.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/temp_shadows_save.bobbin"),
+    );
 }
 
 #[test]
 fn errors_save_shadows_temp() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/save_shadows_temp.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/save_shadows_temp.bobbin"),
+    );
 }
 
 #[test]
 fn errors_save_redeclaration() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/save_redeclaration.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/save_redeclaration.bobbin"),
+    );
 }
 
 #[test]
 fn errors_save_set_undefined() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/save_set_undefined.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/save_set_undefined.bobbin"),
+    );
 }
 
 // =============================================================================
@@ -351,32 +361,44 @@ fn errors_save_set_undefined() {
 
 #[test]
 fn errors_extern_assignment() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/extern_assignment.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/extern_assignment.bobbin"),
+    );
 }
 
 #[test]
 fn errors_extern_redeclaration() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/extern_redeclaration.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/extern_redeclaration.bobbin"),
+    );
 }
 
 #[test]
 fn errors_extern_shadows_temp() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/extern_shadows_temp.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/extern_shadows_temp.bobbin"),
+    );
 }
 
 #[test]
 fn errors_temp_shadows_extern() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/temp_shadows_extern.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/temp_shadows_extern.bobbin"),
+    );
 }
 
 #[test]
 fn errors_extern_shadows_save() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/extern_shadows_save.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/extern_shadows_save.bobbin"),
+    );
 }
 
 #[test]
 fn errors_save_shadows_extern() {
-    support::run_error_test(&support::cases_dir().join("variables/errors/save_shadows_extern.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("variables/errors/save_shadows_extern.bobbin"),
+    );
 }
 
 #[test]

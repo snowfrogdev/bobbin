@@ -118,7 +118,9 @@ impl<'a> Scanner<'a> {
         if let Some(tok) = self.try_keyword("set", TokenKind::Set, ScanMode::Declaration) {
             return Ok(tok);
         }
-        if let Some(tok) = self.try_keyword("extern", TokenKind::Extern, ScanMode::ExternDeclaration) {
+        if let Some(tok) =
+            self.try_keyword("extern", TokenKind::Extern, ScanMode::ExternDeclaration)
+        {
             return Ok(tok);
         }
 

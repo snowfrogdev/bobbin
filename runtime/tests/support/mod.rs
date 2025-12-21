@@ -71,13 +71,23 @@ pub fn run_output_test(case_path: &Path) {
         .unwrap_or_else(|e| panic!("Failed to read test case {}: {}", case_path.display(), e));
 
     let out_path = case_path.with_extension("out");
-    let expected = std::fs::read_to_string(&out_path)
-        .unwrap_or_else(|e| panic!("Failed to read expected output {}: {}", out_path.display(), e));
+    let expected = std::fs::read_to_string(&out_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read expected output {}: {}",
+            out_path.display(),
+            e
+        )
+    });
 
     let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
     let host: Arc<dyn HostState> = Arc::new(EmptyHostState);
     let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
-        .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to create runtime: {}",
+                e.format_with_source(&source)
+            )
+        });
 
     let expected_lines: Vec<&str> = expected.lines().collect();
     let mut actual_lines = Vec::new();
@@ -89,9 +99,9 @@ pub fn run_output_test(case_path: &Path) {
         if !runtime.has_more() {
             break;
         }
-        runtime.advance().unwrap_or_else(|e| {
-            panic!("Runtime error in {}: {}", case_path.display(), e)
-        });
+        runtime
+            .advance()
+            .unwrap_or_else(|e| panic!("Runtime error in {}: {}", case_path.display(), e));
     }
 
     // Compare
@@ -108,7 +118,8 @@ pub fn run_output_test(case_path: &Path) {
 
     for (i, (actual, expected)) in actual_lines.iter().zip(expected_lines.iter()).enumerate() {
         assert_eq!(
-            actual, expected,
+            actual,
+            expected,
             "Line {} mismatch in {}\nExpected: {:?}\nActual: {:?}",
             i + 1,
             case_path.display(),
@@ -155,7 +166,12 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
     let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
     let host: Arc<dyn HostState> = Arc::new(host);
     let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
-        .unwrap_or_else(|e| panic!("Failed to create runtime: {}", e.format_with_source(&source)));
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to create runtime: {}",
+                e.format_with_source(&source)
+            )
+        });
 
     for (step_idx, step) in trace.steps.iter().enumerate() {
         match step {
@@ -195,8 +211,13 @@ pub fn run_error_test(case_path: &Path) {
         .unwrap_or_else(|e| panic!("Failed to read test case {}: {}", case_path.display(), e));
 
     let err_path = case_path.with_extension("err");
-    let expected = std::fs::read_to_string(&err_path)
-        .unwrap_or_else(|e| panic!("Failed to read expected error {}: {}", err_path.display(), e));
+    let expected = std::fs::read_to_string(&err_path).unwrap_or_else(|e| {
+        panic!(
+            "Failed to read expected error {}: {}",
+            err_path.display(),
+            e
+        )
+    });
 
     let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
     let host: Arc<dyn HostState> = Arc::new(EmptyHostState);
@@ -252,11 +273,7 @@ pub fn parse_trace(content: &str) -> Vec<TracePath> {
             if let Some(path) = current_path.take() {
                 paths.push(path);
             }
-            let name = line
-                .strip_prefix("--- path:")
-                .unwrap()
-                .trim()
-                .to_string();
+            let name = line.strip_prefix("--- path:").unwrap().trim().to_string();
             current_path = Some(TracePath {
                 name,
                 steps: Vec::new(),
@@ -331,9 +348,10 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
             return Some(Step::Action(Action::Advance));
         }
         if let Some(idx_str) = inner.strip_prefix("choice ") {
-            let idx: usize = idx_str.trim().parse().unwrap_or_else(|_| {
-                panic!("Line {}: Invalid choice index: {}", line_num, idx_str)
-            });
+            let idx: usize = idx_str
+                .trim()
+                .parse()
+                .unwrap_or_else(|_| panic!("Line {}: Invalid choice index: {}", line_num, idx_str));
             return Some(Step::Action(Action::SelectChoice(idx)));
         }
         if let Some(rest) = inner.strip_prefix("host ") {
@@ -417,7 +435,8 @@ fn execute_runtime_assertion(
         Assertion::Line(expected) => {
             let actual = runtime.current_line();
             assert_eq!(
-                actual, expected,
+                actual,
+                expected,
                 "Line mismatch at step {} in {} (path: {})\nExpected: {:?}\nActual: {:?}",
                 step_idx,
                 case_path.display(),
@@ -429,7 +448,8 @@ fn execute_runtime_assertion(
         Assertion::Choices(expected) => {
             let actual = runtime.current_choices();
             assert_eq!(
-                actual, expected,
+                actual,
+                expected,
                 "Choices mismatch at step {} in {} (path: {})\nExpected: {:?}\nActual: {:?}",
                 step_idx,
                 case_path.display(),
@@ -490,7 +510,8 @@ fn execute_assertion(
         Assertion::Line(expected) => {
             let actual = runtime.current_line();
             assert_eq!(
-                actual, expected,
+                actual,
+                expected,
                 "Line mismatch at step {} in {} (path: {})\nExpected: {:?}\nActual: {:?}",
                 step_idx,
                 case_path.display(),
@@ -502,7 +523,8 @@ fn execute_assertion(
         Assertion::Choices(expected) => {
             let actual = runtime.current_choices();
             assert_eq!(
-                actual, expected,
+                actual,
+                expected,
                 "Choices mismatch at step {} in {} (path: {})\nExpected: {:?}\nActual: {:?}",
                 step_idx,
                 case_path.display(),

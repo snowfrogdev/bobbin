@@ -31,18 +31,10 @@ impl std::fmt::Display for RuntimeError {
                 )
             }
             RuntimeError::MissingSaveVariable { name } => {
-                write!(
-                    f,
-                    "save variable '{}' not found in storage",
-                    name
-                )
+                write!(f, "save variable '{}' not found in storage", name)
             }
             RuntimeError::MissingExternVariable { name } => {
-                write!(
-                    f,
-                    "extern variable '{}' not found in host state",
-                    name
-                )
+                write!(f, "extern variable '{}' not found in host state", name)
             }
         }
     }
@@ -75,11 +67,7 @@ impl std::fmt::Debug for VM {
 }
 
 impl VM {
-    pub fn new(
-        chunk: Chunk,
-        storage: Arc<dyn VariableStorage>,
-        host: Arc<dyn HostState>,
-    ) -> Self {
+    pub fn new(chunk: Chunk, storage: Arc<dyn VariableStorage>, host: Arc<dyn HostState>) -> Self {
         Self {
             chunk,
             ip: 0,
@@ -107,10 +95,7 @@ impl VM {
 
     /// Continue execution after user selects a choice.
     /// Call this after `step()` returns `Choice`. The ip should be pointing at ChoiceSet.
-    pub(crate) fn select_and_continue(
-        &mut self,
-        index: usize,
-    ) -> Result<StepResult, RuntimeError> {
+    pub(crate) fn select_and_continue(&mut self, index: usize) -> Result<StepResult, RuntimeError> {
         // Read ChoiceSet to get targets
         let instruction = self.chunk.code[self.ip].clone();
 
@@ -187,22 +172,18 @@ impl VM {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
                     self.storage.initialize_if_absent(&name, value);
                 }
-                Instruction::GetStorage { name } => {
-                    match self.storage.get(&name) {
-                        Some(value) => self.stack.push(value),
-                        None => return Err(RuntimeError::MissingSaveVariable { name }),
-                    }
-                }
+                Instruction::GetStorage { name } => match self.storage.get(&name) {
+                    Some(value) => self.stack.push(value),
+                    None => return Err(RuntimeError::MissingSaveVariable { name }),
+                },
                 Instruction::SetStorage { name } => {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
                     self.storage.set(&name, value);
                 }
-                Instruction::GetHost { name } => {
-                    match self.host.lookup(&name) {
-                        Some(value) => self.stack.push(value),
-                        None => return Err(RuntimeError::MissingExternVariable { name }),
-                    }
-                }
+                Instruction::GetHost { name } => match self.host.lookup(&name) {
+                    Some(value) => self.stack.push(value),
+                    None => return Err(RuntimeError::MissingExternVariable { name }),
+                },
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK
                     return Ok(StepResult::Done);

@@ -52,11 +52,19 @@ impl<'a> Compiler<'a> {
     /// Emit instruction to read a variable (temp, save, or extern) and push onto stack.
     fn emit_var_read(&mut self, id: NodeId, line: usize) {
         if let Some(name) = self.get_save_name(id) {
-            self.chunk
-                .emit(Instruction::GetStorage { name: name.to_string() }, line);
+            self.chunk.emit(
+                Instruction::GetStorage {
+                    name: name.to_string(),
+                },
+                line,
+            );
         } else if let Some(name) = self.get_extern_name(id) {
-            self.chunk
-                .emit(Instruction::GetHost { name: name.to_string() }, line);
+            self.chunk.emit(
+                Instruction::GetHost {
+                    name: name.to_string(),
+                },
+                line,
+            );
         } else {
             let slot = self.get_slot(id);
             self.chunk.emit(Instruction::GetLocal { slot }, line);
@@ -66,8 +74,12 @@ impl<'a> Compiler<'a> {
     /// Emit instruction to write a value (already on stack) to a variable (temp or save).
     fn emit_var_write(&mut self, id: NodeId, line: usize) {
         if let Some(name) = self.get_save_name(id) {
-            self.chunk
-                .emit(Instruction::SetStorage { name: name.to_string() }, line);
+            self.chunk.emit(
+                Instruction::SetStorage {
+                    name: name.to_string(),
+                },
+                line,
+            );
         } else {
             let slot = self.get_slot(id);
             self.chunk.emit(Instruction::SetLocal { slot }, line);
@@ -81,20 +93,22 @@ impl<'a> Compiler<'a> {
                 // The value lives at its assigned slot position (implicit from declaration order).
                 self.compile_literal(value, span.start);
             }
-            Stmt::SaveDecl(VarBindingData { name, value, span, .. }) => {
+            Stmt::SaveDecl(VarBindingData {
+                name, value, span, ..
+            }) => {
                 // Push initial value onto stack, then emit InitStorage.
                 // InitStorage uses "initialize if absent" semantics for save variables.
                 self.compile_literal(value, span.start);
-                self.chunk.emit(
-                    Instruction::InitStorage { name: name.clone() },
-                    span.start,
-                );
+                self.chunk
+                    .emit(Instruction::InitStorage { name: name.clone() }, span.start);
             }
             Stmt::ExternDecl(_) => {
                 // No-op: extern declarations don't generate code.
                 // The host provides values on-demand when GetHost executes.
             }
-            Stmt::Assignment(VarBindingData { id, value, span, .. }) => {
+            Stmt::Assignment(VarBindingData {
+                id, value, span, ..
+            }) => {
                 // Assignment modifies an existing variable (temp or save).
                 // Push value, then emit appropriate write instruction.
                 self.compile_literal(value, span.start);

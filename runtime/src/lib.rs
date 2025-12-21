@@ -7,9 +7,9 @@ use crate::resolver::{Resolver, SemanticError};
 use crate::scanner::Scanner;
 use crate::vm::{StepResult, VM};
 
-pub use crate::vm::RuntimeError;
 pub use crate::chunk::Value;
 pub use crate::storage::{HostState, VariableStorage};
+pub use crate::vm::RuntimeError;
 
 mod ast;
 mod chunk;
