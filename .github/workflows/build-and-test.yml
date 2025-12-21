@@ -1,6 +1,7 @@
 name: Build and Test
 
 on:
+  workflow_dispatch:
   workflow_call:
     outputs:
       addon-artifact:
