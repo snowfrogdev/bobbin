@@ -256,6 +256,28 @@ jobs:
           Write-Host "=== GDExtension file contents ==="
           Get-Content tests/godot_project/addons/bobbin/bobbin.gdextension
 
+      - name: Check DLL dependencies
+        shell: pwsh
+        run: |
+          $dllPath = "tests/godot_project/addons/bobbin/bin/bobbin_godot.debug.dll"
+          Write-Host "=== Checking DLL: $dllPath ==="
+          if (Test-Path $dllPath) {
+            Write-Host "DLL exists, size: $((Get-Item $dllPath).Length) bytes"
+            # Try to load the DLL to see if it has missing dependencies
+            try {
+              $bytes = [System.IO.File]::ReadAllBytes($dllPath)
+              Write-Host "DLL is readable, first bytes: $($bytes[0..3] -join ',')"
+              # Check PE header
+              if ($bytes[0] -eq 77 -and $bytes[1] -eq 90) {
+                Write-Host "Valid PE header (MZ)"
+              }
+            } catch {
+              Write-Host "Error reading DLL: $_"
+            }
+          } else {
+            Write-Host "DLL NOT FOUND!"
+          }
+
       - name: Download Godot 4.3
         shell: pwsh
         run: |
@@ -264,7 +286,11 @@ jobs:
 
       - name: Import project
         shell: pwsh
-        run: ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project --import --quit; exit 0
+        run: |
+          Write-Host "=== Importing project ==="
+          $output = & ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project --import --quit 2>&1 | Out-String
+          Write-Host $output
+          Write-Host "=== Import complete ==="
 
       - name: Run smoke test
         shell: pwsh
@@ -324,15 +350,19 @@ jobs:
       - name: Export to Web (WASM verification)
         run: |
           mkdir -p tests/godot_project/build/web
-          godot --headless --path tests/godot_project --export-release "Web" build/web/index.html
-          echo "WASM export succeeded - GDExtension loaded correctly"
+          # gdext may crash during shutdown even when export succeeds, so check output files
+          godot --headless --path tests/godot_project --export-release "Web" build/web/index.html || true
 
       - name: Verify export output
         run: |
           ls -la tests/godot_project/build/web/
-          test -f tests/godot_project/build/web/index.html
-          test -f tests/godot_project/build/web/index.wasm
-          echo "PASS: Web export files generated successfully"
+          # Check that export produced the expected files
+          if [ -f tests/godot_project/build/web/index.html ] && [ -f tests/godot_project/build/web/index.wasm ]; then
+            echo "PASS: Web export files generated successfully"
+          else
+            echo "FAIL: Export did not produce expected files"
+            exit 1
+          fi
 
   test-macos:
     needs: build-macos
