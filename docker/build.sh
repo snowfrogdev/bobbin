@@ -64,8 +64,9 @@ case "$TARGET" in
             --target-dir target --profile wasm -Zbuild-std=std,panic_abort --target wasm32-unknown-emscripten
         # Run wasm-opt for aggressive size optimization (more efficient than LTO for WASM)
         WASM_FILE="target/wasm32-unknown-emscripten/wasm/bobbin_godot.wasm"
+        WASM_OPT="$EMSDK/upstream/bin/wasm-opt"
         echo "Before wasm-opt: $(du -h "$WASM_FILE" | cut -f1)"
-        wasm-opt -Oz --enable-threads --enable-bulk-memory "$WASM_FILE" -o "$WASM_FILE.opt"
+        "$WASM_OPT" -Oz --enable-threads --enable-bulk-memory "$WASM_FILE" -o "$WASM_FILE.opt"
         mv "$WASM_FILE.opt" "$WASM_FILE"
         echo "After wasm-opt:  $(du -h "$WASM_FILE" | cut -f1)"
         # WASM uses fixed name (no .debug suffix) - gdext expects 'bobbin_godot.wasm' at runtime
