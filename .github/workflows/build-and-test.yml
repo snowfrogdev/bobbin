@@ -90,7 +90,7 @@ jobs:
         run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project --import --quit || true
 
       - name: Run smoke test
-        run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project -s smoke_test.gd --quit
+        run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project -s res://smoke_test.gd --quit
 
   test-windows:
     needs: build-docker
@@ -116,7 +116,7 @@ jobs:
 
       - name: Run smoke test
         shell: pwsh
-        run: ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project -s smoke_test.gd --quit
+        run: ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project -s res://smoke_test.gd --quit
 
   test-macos:
     needs: [build-docker, build-macos]
@@ -153,7 +153,7 @@ jobs:
         run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project --import --quit || true
 
       - name: Run smoke test
-        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project -s smoke_test.gd --quit
+        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project -s res://smoke_test.gd --quit
 
   test-wasm-export:
     needs: build-docker
