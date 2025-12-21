@@ -1,0 +1,183 @@
+name: Build and Test
+
+on:
+  workflow_call:
+    outputs:
+      addon-artifact:
+        description: "Name of the addon artifact"
+        value: godot-addon
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t bobbin-build docker/
+
+      - name: Build all platforms (Linux + Windows + WASM)
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build all release --ci
+
+      - name: Upload addon artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-addon
+          path: bindings/godot/addons/
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download Godot 4.3
+        run: |
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          unzip godot.zip
+
+      - name: Install Rust nightly
+        run: |
+          rustup toolchain install nightly
+          rustup component add rust-src --toolchain nightly
+
+      - name: Set LLVM path
+        run: echo "LLVM_PATH=$(brew --prefix llvm)" >> $GITHUB_ENV
+
+      - name: Build release
+        run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml --release
+
+      - name: Build debug
+        run: cargo +nightly build --manifest-path bindings/godot/Cargo.toml
+
+      - name: Upload macOS binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: |
+            bindings/godot/target/release/libbobbin_godot.dylib
+            bindings/godot/target/debug/libbobbin_godot.dylib
+
+  test-linux:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download addon
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-addon
+          path: tests/godot_project/addons/
+
+      - name: Download Godot 4.3
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
+          unzip Godot_v4.3-stable_linux.x86_64.zip
+          chmod +x Godot_v4.3-stable_linux.x86_64
+
+      - name: Import project
+        run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project --import --quit || true
+
+      - name: Run smoke test
+        run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project -s smoke_test.gd --quit
+
+  test-windows:
+    needs: build-docker
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download addon
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-addon
+          path: tests/godot_project/addons/
+
+      - name: Download Godot 4.3
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip" -OutFile godot.zip
+          Expand-Archive godot.zip -DestinationPath .
+
+      - name: Import project
+        shell: pwsh
+        run: ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project --import --quit; exit 0
+
+      - name: Run smoke test
+        shell: pwsh
+        run: ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project -s smoke_test.gd --quit
+
+  test-macos:
+    needs: [build-docker, build-macos]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download base addon
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-addon
+          path: tests/godot_project/addons/
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: macos-bin/
+
+      - name: Install macOS binaries
+        run: |
+          cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/
+          cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/libbobbin_godot.debug.dylib
+
+      - name: Download Godot 4.3
+        run: |
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          unzip godot.zip
+
+      - name: Remove quarantine
+        run: xattr -dr com.apple.quarantine Godot.app tests/godot_project/addons/bobbin/bin/*.dylib || true
+
+      - name: Import project
+        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project --import --quit || true
+
+      - name: Run smoke test
+        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project -s smoke_test.gd --quit
+
+  test-wasm-export:
+    needs: build-docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download addon
+        uses: actions/download-artifact@v4
+        with:
+          name: godot-addon
+          path: tests/godot_project/addons/
+
+      - name: Setup Godot with export templates
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.0
+          use-dotnet: false
+          include-templates: true
+
+      - name: Verify Godot setup
+        run: godot --version
+
+      - name: Import project
+        run: godot --headless --path tests/godot_project --import --quit || true
+
+      - name: Export to Web (WASM verification)
+        run: |
+          mkdir -p tests/godot_project/build/web
+          godot --headless --path tests/godot_project --export-release "Web" build/web/index.html
+          echo "WASM export succeeded - GDExtension loaded correctly"
+
+      - name: Verify export output
+        run: |
+          ls -la tests/godot_project/build/web/
+          test -f tests/godot_project/build/web/index.html
+          test -f tests/godot_project/build/web/index.wasm
+          echo "PASS: Web export files generated successfully"
