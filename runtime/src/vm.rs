@@ -1,4 +1,5 @@
 use crate::chunk::{Chunk, Instruction, Value};
+use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic, Severity};
 use crate::storage::{HostState, VariableStorage};
 use std::sync::Arc;
 
@@ -41,6 +42,52 @@ impl std::fmt::Display for RuntimeError {
 }
 
 impl std::error::Error for RuntimeError {}
+
+impl IntoDiagnostic for RuntimeError {
+    fn into_diagnostic(self, _ctx: &DiagnosticContext) -> Diagnostic {
+        // Runtime errors don't have source spans - they occur during execution.
+        // We use empty labels rather than dummy spans to avoid misleading source highlighting.
+        match self {
+            RuntimeError::NotAtChoice => Diagnostic {
+                severity: Severity::Error,
+                message: "select_and_continue called but VM is not waiting for a choice".to_string(),
+                labels: vec![],
+                notes: vec!["This is an API usage error - check your game logic".to_string()],
+                suggestions: vec![],
+            },
+            RuntimeError::InvalidChoiceIndex { index, count } => Diagnostic {
+                severity: Severity::Error,
+                message: format!(
+                    "choice index {} out of bounds (only {} choices available)",
+                    index, count
+                ),
+                labels: vec![],
+                notes: vec!["Check that the choice index is within the valid range".to_string()],
+                suggestions: vec![],
+            },
+            RuntimeError::MissingSaveVariable { name } => Diagnostic {
+                severity: Severity::Error,
+                message: format!("save variable '{}' not found in storage", name),
+                labels: vec![],
+                notes: vec![
+                    "This may indicate corrupted or cleared save data".to_string(),
+                    "Ensure the variable was declared with 'save' before use".to_string(),
+                ],
+                suggestions: vec![],
+            },
+            RuntimeError::MissingExternVariable { name } => Diagnostic {
+                severity: Severity::Error,
+                message: format!("extern variable '{}' not found in host state", name),
+                labels: vec![],
+                notes: vec![
+                    "The host game must provide this variable before running the script".to_string(),
+                    "Check that your game's HostState implementation returns a value for this variable".to_string(),
+                ],
+                suggestions: vec![],
+            },
+        }
+    }
+}
 
 pub(crate) enum StepResult {
     Line(String),

@@ -84,8 +84,8 @@ pub fn run_output_test(case_path: &Path) {
     let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
         .unwrap_or_else(|e| {
             panic!(
-                "Failed to create runtime: {}",
-                e.format_with_source(&source)
+                "Failed to create runtime:\n{}",
+                e.render(case_path.to_str().unwrap_or("<unknown>"), &source)
             )
         });
 
@@ -168,8 +168,8 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
     let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
         .unwrap_or_else(|e| {
             panic!(
-                "Failed to create runtime: {}",
-                e.format_with_source(&source)
+                "Failed to create runtime:\n{}",
+                e.render(case_path.to_str().unwrap_or("<unknown>"), &source)
             )
         });
 
@@ -229,7 +229,8 @@ pub fn run_error_test(case_path: &Path) {
             );
         }
         Err(err) => {
-            let err_string = err.format_with_source(&source);
+            let source_id = case_path.to_str().unwrap_or("<unknown>");
+            let err_string = err.render(source_id, &source);
             let err_lower = err_string.to_lowercase();
 
             for expected_substring in expected.lines() {
@@ -239,7 +240,7 @@ pub fn run_error_test(case_path: &Path) {
                 }
                 assert!(
                     err_lower.contains(&expected_substring.to_lowercase()),
-                    "Error message missing expected substring in {}\nExpected to contain: {:?}\nActual error: {}",
+                    "Error message missing expected substring in {}\nExpected to contain: {:?}\nActual error:\n{}",
                     case_path.display(),
                     expected_substring,
                     err_string

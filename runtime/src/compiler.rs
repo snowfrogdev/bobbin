@@ -2,7 +2,7 @@ use crate::ast::{Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::chunk::{Chunk, Instruction, Value};
 use crate::resolver::SymbolTable;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CompileError {}
 
 #[derive(Debug)]

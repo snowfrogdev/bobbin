@@ -1,26 +1,31 @@
+use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::token::{Span, Token, TokenKind};
 
-/// Convert byte offset to (line, column), both 1-indexed.
-pub fn offset_to_position(source: &str, offset: usize) -> (usize, usize) {
-    let mut line = 1;
-    let mut col = 1;
-    for (i, ch) in source.char_indices() {
-        if i >= offset {
-            break;
-        }
-        if ch == '\n' {
-            line += 1;
-            col = 1;
-        } else {
-            col += 1;
-        }
-    }
-    (line, col)
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LexicalError {
     Unexpected { message: &'static str, span: Span },
+}
+
+impl IntoDiagnostic for LexicalError {
+    fn into_diagnostic(self, _ctx: &DiagnosticContext) -> Diagnostic {
+        match self {
+            LexicalError::Unexpected { message, span } => {
+                let mut diag =
+                    Diagnostic::error(format!("lexical error: {}", message), span, message);
+
+                // Add helpful notes for specific error types
+                if message.contains("Tabs not allowed") {
+                    diag = diag.with_note("Bobbin uses spaces for indentation, not tabs");
+                } else if message.contains("Unterminated string") {
+                    diag = diag.with_note("Strings cannot span multiple lines");
+                } else if message.contains("Unexpected '}'") {
+                    diag = diag.with_suggestion("use '}}' for a literal brace in text", span, "}}");
+                }
+
+                diag
+            }
+        }
+    }
 }
 
 /// Scanning mode determines what tokens we expect next

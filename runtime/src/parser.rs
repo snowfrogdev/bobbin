@@ -1,10 +1,11 @@
 use std::iter::Peekable;
 
 use crate::ast::{Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
-use crate::scanner::{LexicalError, offset_to_position};
+use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
+use crate::scanner::LexicalError;
 use crate::token::{Span, Token, TokenKind};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ParseError {
     Lexical(LexicalError),
     Syntax { message: String, span: Span },
@@ -16,16 +17,12 @@ impl From<LexicalError> for ParseError {
     }
 }
 
-impl ParseError {
-    pub fn format_with_source(&self, source: &str) -> String {
+impl IntoDiagnostic for ParseError {
+    fn into_diagnostic(self, ctx: &DiagnosticContext) -> Diagnostic {
         match self {
-            ParseError::Lexical(LexicalError::Unexpected { message, span }) => {
-                let (line, col) = offset_to_position(source, span.start);
-                format!("[{}:{}] lexical error: {}", line, col, message)
-            }
+            ParseError::Lexical(lex_err) => lex_err.into_diagnostic(ctx),
             ParseError::Syntax { message, span } => {
-                let (line, col) = offset_to_position(source, span.start);
-                format!("[{}:{}] syntax error: {}", line, col, message)
+                Diagnostic::error(format!("syntax error: {}", message), span, &message)
             }
         }
     }
