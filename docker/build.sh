@@ -132,6 +132,3 @@ else
     echo "Done! [$TARGET $BUILD_TYPE] Artifact copied to $BIN_DIR/"
 fi
 
-# Show directory structure for debugging
-echo "=== Directory structure ==="
-ls -la "$BIN_DIR/"
