@@ -17,8 +17,7 @@ jobs:
       - name: Run runtime tests
         run: cargo test --manifest-path runtime/Cargo.toml
 
-  # Build Docker image once and share across all Docker-based build jobs
-  build-docker-image:
+  build-linux-release:
     needs: test-runtime
     runs-on: ubuntu-latest
     steps:
@@ -36,30 +35,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Save Docker image
-        run: docker save bobbin-build -o bobbin-build.tar
-
-      - name: Upload Docker image
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: bobbin-build.tar
-          retention-days: 1
-
-  build-linux-release:
-    needs: build-docker-image
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
-
-      - name: Load Docker image
-        run: docker load -i bobbin-build.tar
-
       - name: Build Linux release
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build linux release --ci
 
@@ -70,18 +45,22 @@ jobs:
           path: bindings/godot/addons/bobbin/bin/libbobbin_godot.so
 
   build-linux-debug:
-    needs: build-docker-image
+    needs: test-runtime
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Load Docker image
-        run: docker load -i bobbin-build.tar
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build Linux debug
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build linux debug --ci
@@ -93,18 +72,22 @@ jobs:
           path: bindings/godot/addons/bobbin/bin/libbobbin_godot.debug.so
 
   build-windows-release:
-    needs: build-docker-image
+    needs: test-runtime
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Load Docker image
-        run: docker load -i bobbin-build.tar
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build Windows release
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build windows release --ci
@@ -116,18 +99,22 @@ jobs:
           path: bindings/godot/addons/bobbin/bin/bobbin_godot.dll
 
   build-windows-debug:
-    needs: build-docker-image
+    needs: test-runtime
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Load Docker image
-        run: docker load -i bobbin-build.tar
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build Windows debug
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build windows debug --ci
@@ -139,18 +126,22 @@ jobs:
           path: bindings/godot/addons/bobbin/bin/bobbin_godot.debug.dll
 
   build-wasm:
-    needs: build-docker-image
+    needs: test-runtime
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Docker image
-        uses: actions/download-artifact@v4
-        with:
-          name: docker-image
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Load Docker image
-        run: docker load -i bobbin-build.tar
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build WASM
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build wasm --ci
