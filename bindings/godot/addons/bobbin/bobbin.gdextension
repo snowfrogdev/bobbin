@@ -3,6 +3,9 @@ entry_symbol = "gdext_rust_init"
 compatibility_minimum = 4.2
 reloadable = true
 
+[icons]
+BobbinScript = "res://addons/bobbin/bobbin_icon_16.png"
+
 [libraries]
 windows.debug.x86_64 = "res://addons/bobbin/bin/bobbin_godot.debug.dll"
 windows.release.x86_64 = "res://addons/bobbin/bin/bobbin_godot.dll"
