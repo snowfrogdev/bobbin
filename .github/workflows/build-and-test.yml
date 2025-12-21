@@ -35,14 +35,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build Linux
+      - name: Build Linux release
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build linux release --ci
 
-      - name: Upload Linux binary
+      - name: Build Linux debug
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build linux debug --ci
+
+      - name: Upload Linux binaries
         uses: actions/upload-artifact@v4
         with:
-          name: linux-binary
-          path: bindings/godot/addons/bobbin/bin/libbobbin_godot.so
+          name: linux-binaries
+          path: |
+            bindings/godot/addons/bobbin/bin/libbobbin_godot.so
+            bindings/godot/addons/bobbin/bin/libbobbin_godot.debug.so
 
   build-windows:
     needs: test-runtime
@@ -62,14 +67,19 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build Windows
+      - name: Build Windows release
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build windows release --ci
 
-      - name: Upload Windows binary
+      - name: Build Windows debug
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build windows debug --ci
+
+      - name: Upload Windows binaries
         uses: actions/upload-artifact@v4
         with:
-          name: windows-binary
-          path: bindings/godot/addons/bobbin/bin/bobbin_godot.dll
+          name: windows-binaries
+          path: |
+            bindings/godot/addons/bobbin/bin/bobbin_godot.dll
+            bindings/godot/addons/bobbin/bin/bobbin_godot.debug.dll
 
   build-wasm:
     needs: test-runtime
@@ -138,10 +148,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Linux binary
+      - name: Download Linux binaries
         uses: actions/download-artifact@v4
         with:
-          name: linux-binary
+          name: linux-binaries
           path: tests/godot_project/addons/bobbin/bin/
 
       - name: Copy addon base files
@@ -167,10 +177,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Windows binary
+      - name: Download Windows binaries
         uses: actions/download-artifact@v4
         with:
-          name: windows-binary
+          name: windows-binaries
           path: tests/godot_project/addons/bobbin/bin/
 
       - name: Copy addon base files
@@ -271,8 +281,9 @@ jobs:
         run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project -s res://smoke_test.gd --quit
 
   # Assembles the complete addon with all platform binaries for release
+  # Only runs after all tests pass to ensure we only package verified binaries
   assemble-addon:
-    needs: [build-linux, build-windows, build-wasm, build-macos]
+    needs: [test-linux, test-windows, test-wasm-export, test-macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -280,16 +291,16 @@ jobs:
       - name: Create bin directory
         run: mkdir -p bindings/godot/addons/bobbin/bin/
 
-      - name: Download Linux binary
+      - name: Download Linux binaries
         uses: actions/download-artifact@v4
         with:
-          name: linux-binary
+          name: linux-binaries
           path: bindings/godot/addons/bobbin/bin/
 
-      - name: Download Windows binary
+      - name: Download Windows binaries
         uses: actions/download-artifact@v4
         with:
-          name: windows-binary
+          name: windows-binaries
           path: bindings/godot/addons/bobbin/bin/
 
       - name: Download WASM binary
