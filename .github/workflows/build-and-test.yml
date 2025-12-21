@@ -17,7 +17,7 @@ jobs:
       - name: Run runtime tests
         run: cargo test --manifest-path runtime/Cargo.toml
 
-  build-docker:
+  build-linux:
     needs: test-runtime
     runs-on: ubuntu-latest
     steps:
@@ -35,21 +35,68 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build all platforms (Linux + Windows + WASM)
-        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build all release --ci
+      - name: Build Linux
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build linux release --ci
 
-      - name: Debug - Show addon structure
-        run: |
-          echo "=== Addon directory structure ==="
-          find bindings/godot/addons -type f | head -50
-          echo "=== Bin directory contents ==="
-          ls -la bindings/godot/addons/bobbin/bin/ || echo "bin/ directory not found"
-
-      - name: Upload addon artifact
+      - name: Upload Linux binary
         uses: actions/upload-artifact@v4
         with:
-          name: godot-addon
-          path: bindings/godot/addons/
+          name: linux-binary
+          path: bindings/godot/addons/bobbin/bin/libbobbin_godot.so
+
+  build-windows:
+    needs: test-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Windows
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build windows release --ci
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-binary
+          path: bindings/godot/addons/bobbin/bin/bobbin_godot.dll
+
+  build-wasm:
+    needs: test-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/
+          load: true
+          tags: bobbin-build
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build WASM
+        run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build wasm --ci
+
+      - name: Upload WASM binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-binary
+          path: bindings/godot/addons/bobbin/bin/bobbin_godot.wasm
 
   build-macos:
     needs: test-runtime
@@ -86,22 +133,21 @@ jobs:
             bindings/godot/target/debug/libbobbin_godot.dylib
 
   test-linux:
-    needs: build-docker
+    needs: build-linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download addon
+      - name: Download Linux binary
         uses: actions/download-artifact@v4
         with:
-          name: godot-addon
-          path: tests/godot_project/addons/
+          name: linux-binary
+          path: tests/godot_project/addons/bobbin/bin/
 
-      - name: Debug - Show downloaded addon
+      - name: Copy addon base files
         run: |
-          echo "=== Downloaded addon structure ==="
-          find tests/godot_project/addons -type f | head -30
-          ls -la tests/godot_project/addons/bobbin/bin/ || echo "bin/ not found"
+          cp -r bindings/godot/addons/bobbin/* tests/godot_project/addons/bobbin/
+          ls -la tests/godot_project/addons/bobbin/bin/
 
       - name: Download Godot 4.3
         run: |
@@ -116,16 +162,22 @@ jobs:
         run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project -s res://smoke_test.gd --quit
 
   test-windows:
-    needs: build-docker
+    needs: build-windows
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download addon
+      - name: Download Windows binary
         uses: actions/download-artifact@v4
         with:
-          name: godot-addon
-          path: tests/godot_project/addons/
+          name: windows-binary
+          path: tests/godot_project/addons/bobbin/bin/
+
+      - name: Copy addon base files
+        shell: pwsh
+        run: |
+          Copy-Item -Path bindings/godot/addons/bobbin/* -Destination tests/godot_project/addons/bobbin/ -Recurse -Force
+          Get-ChildItem tests/godot_project/addons/bobbin/bin/
 
       - name: Download Godot 4.3
         shell: pwsh
@@ -141,64 +193,22 @@ jobs:
         shell: pwsh
         run: ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project -s res://smoke_test.gd --quit
 
-  test-macos:
-    needs: [build-docker, build-macos]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download base addon
-        uses: actions/download-artifact@v4
-        with:
-          name: godot-addon
-          path: tests/godot_project/addons/
-
-      - name: Download macOS binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-binaries
-          path: macos-bin/
-
-      - name: Debug - Show downloaded artifacts
-        run: |
-          echo "=== Addon structure ==="
-          find tests/godot_project/addons -type f | head -30
-          echo "=== macOS binaries ==="
-          find macos-bin -type f
-
-      - name: Install macOS binaries
-        run: |
-          mkdir -p tests/godot_project/addons/bobbin/bin/
-          cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/
-          cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/libbobbin_godot.debug.dylib
-          echo "=== Installed binaries ==="
-          ls -la tests/godot_project/addons/bobbin/bin/
-
-      - name: Download Godot 4.3
-        run: |
-          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
-          unzip godot.zip
-
-      - name: Remove quarantine
-        run: xattr -dr com.apple.quarantine Godot.app tests/godot_project/addons/bobbin/bin/*.dylib || true
-
-      - name: Import project
-        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project --import --quit || true
-
-      - name: Run smoke test
-        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project -s res://smoke_test.gd --quit
-
   test-wasm-export:
-    needs: build-docker
+    needs: build-wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download addon
+      - name: Download WASM binary
         uses: actions/download-artifact@v4
         with:
-          name: godot-addon
-          path: tests/godot_project/addons/
+          name: wasm-binary
+          path: tests/godot_project/addons/bobbin/bin/
+
+      - name: Copy addon base files
+        run: |
+          cp -r bindings/godot/addons/bobbin/* tests/godot_project/addons/bobbin/
+          ls -la tests/godot_project/addons/bobbin/bin/
 
       - name: Setup Godot with export templates
         uses: chickensoft-games/setup-godot@v2
@@ -225,3 +235,89 @@ jobs:
           test -f tests/godot_project/build/web/index.html
           test -f tests/godot_project/build/web/index.wasm
           echo "PASS: Web export files generated successfully"
+
+  test-macos:
+    needs: build-macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: macos-bin/
+
+      - name: Setup addon with macOS binaries
+        run: |
+          mkdir -p tests/godot_project/addons/bobbin/bin/
+          cp -r bindings/godot/addons/bobbin/* tests/godot_project/addons/bobbin/
+          cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/
+          cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/libbobbin_godot.debug.dylib
+          ls -la tests/godot_project/addons/bobbin/bin/
+
+      - name: Download Godot 4.3
+        run: |
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          unzip godot.zip
+
+      - name: Remove quarantine
+        run: xattr -dr com.apple.quarantine Godot.app tests/godot_project/addons/bobbin/bin/*.dylib || true
+
+      - name: Import project
+        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project --import --quit || true
+
+      - name: Run smoke test
+        run: ./Godot.app/Contents/MacOS/Godot --headless --path tests/godot_project -s res://smoke_test.gd --quit
+
+  # Assembles the complete addon with all platform binaries for release
+  assemble-addon:
+    needs: [build-linux, build-windows, build-wasm, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create bin directory
+        run: mkdir -p bindings/godot/addons/bobbin/bin/
+
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-binary
+          path: bindings/godot/addons/bobbin/bin/
+
+      - name: Download Windows binary
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-binary
+          path: bindings/godot/addons/bobbin/bin/
+
+      - name: Download WASM binary
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-binary
+          path: bindings/godot/addons/bobbin/bin/
+
+      - name: Download macOS binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-binaries
+          path: macos-bin/
+
+      - name: Install macOS binaries
+        run: |
+          cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib bindings/godot/addons/bobbin/bin/
+          cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib bindings/godot/addons/bobbin/bin/libbobbin_godot.debug.dylib
+
+      - name: Show final addon contents
+        run: |
+          echo "=== Complete addon structure ==="
+          find bindings/godot/addons -type f
+          echo "=== Bin directory ==="
+          ls -la bindings/godot/addons/bobbin/bin/
+
+      - name: Upload complete addon
+        uses: actions/upload-artifact@v4
+        with:
+          name: godot-addon
+          path: bindings/godot/addons/

@@ -25,27 +25,6 @@ jobs:
           name: godot-addon
           path: addons/
 
-      - name: Download macOS binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-binaries
-          path: macos-bin/
-
-      - name: Debug - Show downloaded artifacts
-        run: |
-          echo "=== Addon structure ==="
-          find addons -type f | head -30
-          echo "=== macOS binaries ==="
-          find macos-bin -type f
-
-      - name: Merge macOS binaries into addon
-        run: |
-          mkdir -p addons/bobbin/bin/
-          cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.dylib
-          cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib addons/bobbin/bin/libbobbin_godot.debug.dylib
-          echo "=== Final bin contents ==="
-          ls -la addons/bobbin/bin/
-
       - name: Determine version
         id: version
         run: |
