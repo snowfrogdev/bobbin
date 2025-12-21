@@ -28,6 +28,13 @@ jobs:
       - name: Build all platforms (Linux + Windows + WASM)
         run: docker run --rm -v ${{ github.workspace }}:/workspace bobbin-build all release --ci
 
+      - name: Debug - Show addon structure
+        run: |
+          echo "=== Addon directory structure ==="
+          find bindings/godot/addons -type f | head -50
+          echo "=== Bin directory contents ==="
+          ls -la bindings/godot/addons/bobbin/bin/ || echo "bin/ directory not found"
+
       - name: Upload addon artifact
         uses: actions/upload-artifact@v4
         with:
@@ -79,6 +86,12 @@ jobs:
         with:
           name: godot-addon
           path: tests/godot_project/addons/
+
+      - name: Debug - Show downloaded addon
+        run: |
+          echo "=== Downloaded addon structure ==="
+          find tests/godot_project/addons -type f | head -30
+          ls -la tests/godot_project/addons/bobbin/bin/ || echo "bin/ not found"
 
       - name: Download Godot 4.3
         run: |
@@ -136,10 +149,20 @@ jobs:
           name: macos-binaries
           path: macos-bin/
 
+      - name: Debug - Show downloaded artifacts
+        run: |
+          echo "=== Addon structure ==="
+          find tests/godot_project/addons -type f | head -30
+          echo "=== macOS binaries ==="
+          find macos-bin -type f
+
       - name: Install macOS binaries
         run: |
+          mkdir -p tests/godot_project/addons/bobbin/bin/
           cp macos-bin/bindings/godot/target/release/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/
           cp macos-bin/bindings/godot/target/debug/libbobbin_godot.dylib tests/godot_project/addons/bobbin/bin/libbobbin_godot.debug.dylib
+          echo "=== Installed binaries ==="
+          ls -la tests/godot_project/addons/bobbin/bin/
 
       - name: Download Godot 4.3
         run: |

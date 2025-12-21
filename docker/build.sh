@@ -2,6 +2,7 @@
 set -e
 
 BIN_DIR="bindings/godot/addons/bobbin/bin"
+mkdir -p "$BIN_DIR"
 
 # Parse arguments - look for --ci flag anywhere
 CI_MODE=false
@@ -130,3 +131,7 @@ if [ "$CI_MODE" = true ]; then
 else
     echo "Done! [$TARGET $BUILD_TYPE] Artifact copied to $BIN_DIR/"
 fi
+
+# Show directory structure for debugging
+echo "=== Directory structure ==="
+ls -la "$BIN_DIR/"
