@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run runtime tests
-        run: cargo test -p bobbin-runtime
+        run: cargo test --manifest-path runtime/Cargo.toml
 
   build-docker:
     needs: test-runtime
