@@ -66,7 +66,7 @@ case "$TARGET" in
         WASM_FILE="target/wasm32-unknown-emscripten/wasm/bobbin_godot.wasm"
         WASM_OPT="$EMSDK/upstream/bin/wasm-opt"
         echo "Before wasm-opt: $(du -h "$WASM_FILE" | cut -f1)"
-        "$WASM_OPT" -Oz --enable-threads --enable-bulk-memory "$WASM_FILE" -o "$WASM_FILE.opt"
+        "$WASM_OPT" -Oz --enable-threads --enable-bulk-memory --enable-nontrapping-float-to-int "$WASM_FILE" -o "$WASM_FILE.opt"
         mv "$WASM_FILE.opt" "$WASM_FILE"
         echo "After wasm-opt:  $(du -h "$WASM_FILE" | cut -f1)"
         # WASM uses fixed name (no .debug suffix) - gdext expects 'bobbin_godot.wasm' at runtime
