@@ -43,3 +43,12 @@ lto = "thin"
 inherits = "dev"
 lto = false
 codegen-units = 16
+
+# WASM builds: size-optimized without LTO (LTO + build-std exceeds CI memory)
+# Post-build wasm-opt provides similar size reduction more efficiently
+[profile.wasm]
+inherits = "release"
+lto = false
+codegen-units = 1
+opt-level = "z"
+strip = true
