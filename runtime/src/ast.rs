@@ -12,17 +12,12 @@ pub struct Script {
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    Line {
-        parts: Vec<TextPart>,
-        span: Span,
-    },
+    Line { parts: Vec<TextPart>, span: Span },
     TempDecl(VarBindingData),
     SaveDecl(VarBindingData),
     ExternDecl(ExternDeclData),
     Assignment(VarBindingData),
-    ChoiceSet {
-        choices: Vec<Choice>,
-    },
+    ChoiceSet { choices: Vec<Choice> },
 }
 
 #[derive(Debug, Clone)]

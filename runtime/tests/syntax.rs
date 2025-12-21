@@ -9,7 +9,9 @@ fn errors_tabs() {
 
 #[test]
 fn errors_unclosed_interpolation() {
-    support::run_error_test(&support::cases_dir().join("syntax/errors/unclosed_interpolation.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("syntax/errors/unclosed_interpolation.bobbin"),
+    );
 }
 
 #[test]
@@ -28,7 +30,9 @@ fn errors_lone_closing_brace() {
 
 #[test]
 fn errors_set_missing_identifier() {
-    support::run_error_test(&support::cases_dir().join("syntax/errors/set_missing_identifier.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("syntax/errors/set_missing_identifier.bobbin"),
+    );
 }
 
 #[test]
@@ -43,5 +47,7 @@ fn errors_set_missing_value() {
 
 #[test]
 fn errors_invalid_declaration_character() {
-    support::run_error_test(&support::cases_dir().join("syntax/errors/invalid_declaration_character.bobbin"));
+    support::run_error_test(
+        &support::cases_dir().join("syntax/errors/invalid_declaration_character.bobbin"),
+    );
 }
