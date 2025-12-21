@@ -2,6 +2,7 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::compiler::{CompileError, Compiler};
+use crate::diagnostic::{DiagnosticContext, IntoDiagnostic, JaroWinklerMatcher};
 use crate::parser::{ParseError, Parser};
 use crate::resolver::{Resolver, SemanticError};
 use crate::scanner::Scanner;
@@ -14,17 +15,24 @@ pub use crate::vm::RuntimeError;
 mod ast;
 mod chunk;
 mod compiler;
+pub mod diagnostic;
 mod parser;
 mod resolver;
 mod scanner;
 mod storage;
-mod token;
+pub mod token;
 mod vm;
 
-#[derive(Debug)]
+pub use diagnostic::{AriadneRenderer, Diagnostic, Renderer};
+
+#[derive(Debug, Clone)]
 pub enum BobbinError {
     Parse(Vec<ParseError>),
-    Semantic(Vec<SemanticError>),
+    /// Semantic errors with the list of known variables for "did you mean?" suggestions.
+    Semantic {
+        errors: Vec<SemanticError>,
+        known_variables: Vec<String>,
+    },
     Compile(CompileError),
     Runtime(RuntimeError),
 }
@@ -35,9 +43,12 @@ impl From<Vec<ParseError>> for BobbinError {
     }
 }
 
-impl From<Vec<SemanticError>> for BobbinError {
-    fn from(errors: Vec<SemanticError>) -> Self {
-        BobbinError::Semantic(errors)
+impl From<(Vec<SemanticError>, Vec<String>)> for BobbinError {
+    fn from((errors, known_variables): (Vec<SemanticError>, Vec<String>)) -> Self {
+        BobbinError::Semantic {
+            errors,
+            known_variables,
+        }
     }
 }
 
@@ -59,7 +70,7 @@ impl fmt::Display for BobbinError {
             BobbinError::Parse(errors) => {
                 write!(f, "{} parse error(s)", errors.len())
             }
-            BobbinError::Semantic(errors) => {
+            BobbinError::Semantic { errors, .. } => {
                 write!(f, "{} semantic error(s)", errors.len())
             }
             BobbinError::Compile(err) => {
@@ -73,22 +84,85 @@ impl fmt::Display for BobbinError {
 }
 
 impl BobbinError {
-    /// Format error with source context (line:column).
-    pub fn format_with_source(&self, source: &str) -> String {
+    /// Convert this error into diagnostics for rendering (consuming version).
+    pub fn into_diagnostics(self) -> Vec<Diagnostic> {
         match self {
-            BobbinError::Parse(errors) => errors
-                .iter()
-                .map(|e| e.format_with_source(source))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            BobbinError::Semantic(errors) => errors
-                .iter()
-                .map(|e| e.format_with_source(source))
-                .collect::<Vec<_>>()
-                .join("\n"),
-            BobbinError::Compile(err) => format!("compile error: {:?}", err),
-            BobbinError::Runtime(err) => format!("runtime error: {}", err),
+            BobbinError::Parse(errors) => {
+                let matcher = JaroWinklerMatcher::default();
+                let ctx = DiagnosticContext::new(&[], &matcher);
+                errors
+                    .into_iter()
+                    .map(|e| e.into_diagnostic(&ctx))
+                    .collect()
+            }
+            BobbinError::Semantic {
+                errors,
+                known_variables,
+            } => {
+                let matcher = JaroWinklerMatcher::default();
+                let ctx = DiagnosticContext::new(&known_variables, &matcher);
+                errors
+                    .into_iter()
+                    .map(|e| e.into_diagnostic(&ctx))
+                    .collect()
+            }
+            BobbinError::Compile(_err) => {
+                // CompileError is currently empty - handle when populated
+                vec![]
+            }
+            BobbinError::Runtime(err) => {
+                let matcher = JaroWinklerMatcher::default();
+                let ctx = DiagnosticContext::new(&[], &matcher);
+                vec![err.into_diagnostic(&ctx)]
+            }
         }
+    }
+
+    /// Convert this error into diagnostics for rendering (borrowing version).
+    ///
+    /// This is more efficient than `into_diagnostics()` when you need to retain the error,
+    /// as it only clones individual errors rather than the entire `BobbinError`.
+    pub fn to_diagnostics(&self) -> Vec<Diagnostic> {
+        match self {
+            BobbinError::Parse(errors) => {
+                let matcher = JaroWinklerMatcher::default();
+                let ctx = DiagnosticContext::new(&[], &matcher);
+                errors
+                    .iter()
+                    .map(|e| e.clone().into_diagnostic(&ctx))
+                    .collect()
+            }
+            BobbinError::Semantic {
+                errors,
+                known_variables,
+            } => {
+                let matcher = JaroWinklerMatcher::default();
+                let ctx = DiagnosticContext::new(known_variables, &matcher);
+                errors
+                    .iter()
+                    .map(|e| e.clone().into_diagnostic(&ctx))
+                    .collect()
+            }
+            BobbinError::Compile(_err) => {
+                // CompileError is currently empty - handle when populated
+                vec![]
+            }
+            BobbinError::Runtime(err) => {
+                let matcher = JaroWinklerMatcher::default();
+                let ctx = DiagnosticContext::new(&[], &matcher);
+                vec![err.clone().into_diagnostic(&ctx)]
+            }
+        }
+    }
+
+    /// Render this error with beautiful terminal output.
+    ///
+    /// This is a convenience method that converts to diagnostics and renders them.
+    pub fn render(&self, source_id: &str, source: &str) -> String {
+        let diagnostics = self.to_diagnostics();
+        let renderer = AriadneRenderer::new();
+        // AriadneRenderer normalizes line endings internally
+        renderer.render_all(&diagnostics, source_id, source)
     }
 }
 

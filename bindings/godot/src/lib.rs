@@ -783,7 +783,10 @@ impl BobbinRuntime {
                 inner: runtime,
             })),
             Err(e) => {
-                godot_error!("Failed to create runtime:\n{}", e.format_with_source(&content.to_string()));
+                godot_error!(
+                    "Failed to create runtime:\n{}",
+                    e.render("<script>", &content.to_string())
+                );
                 None
             }
         }

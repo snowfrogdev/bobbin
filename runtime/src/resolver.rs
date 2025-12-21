@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use crate::ast::{Choice, ExternDeclData, NodeId, Script, Stmt, TextPart, VarBindingData};
-use crate::scanner::offset_to_position;
+use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::token::Span;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SemanticError {
     UndefinedVariable {
         name: String,
@@ -21,32 +21,47 @@ pub enum SemanticError {
     },
 }
 
-impl SemanticError {
-    pub fn format_with_source(&self, source: &str) -> String {
+impl IntoDiagnostic for SemanticError {
+    fn into_diagnostic(self, ctx: &DiagnosticContext) -> Diagnostic {
         match self {
             SemanticError::UndefinedVariable { name, span } => {
-                let (line, col) = offset_to_position(source, span.start);
-                format!("[{}:{}] undefined variable: {}", line, col, name)
+                let mut diag = Diagnostic::error(
+                    format!("undefined variable '{}'", name),
+                    span,
+                    "not defined in this scope",
+                );
+
+                // Add "did you mean?" suggestion using fuzzy matching
+                if let Some(similar) = ctx.find_similar_variable(&name) {
+                    diag = diag.with_suggestion(
+                        format!("did you mean '{}'?", similar),
+                        span,
+                        similar.to_string(),
+                    );
+                }
+
+                diag
             }
             SemanticError::Shadowing {
                 name,
                 span,
                 original,
-            } => {
-                let (line, col) = offset_to_position(source, span.start);
-                let (orig_line, orig_col) = offset_to_position(source, original.start);
-                format!(
-                    "[{}:{}] variable '{}' shadows declaration at [{}:{}]",
-                    line, col, name, orig_line, orig_col
-                )
-            }
-            SemanticError::AssignmentToExtern { name, span } => {
-                let (line, col) = offset_to_position(source, span.start);
-                format!(
-                    "[{}:{}] cannot assign to extern variable '{}' (extern variables are read-only)",
-                    line, col, name
-                )
-            }
+            } => Diagnostic::error(
+                format!("variable '{}' shadows previous declaration", name),
+                span,
+                "shadows previous declaration",
+            )
+            .with_secondary(original, "previously declared here")
+            .with_note("Bobbin does not allow shadowing to prevent confusion in dialogue scripts"),
+            SemanticError::AssignmentToExtern { name, span } => Diagnostic::error(
+                format!("cannot assign to extern variable '{}'", name),
+                span,
+                "extern variables are read-only",
+            )
+            .with_note(
+                "Extern variables are provided by the host game and cannot be modified by scripts",
+            )
+            .with_note("Use 'save' or 'temp' to declare a mutable variable instead"),
         }
     }
 }
@@ -127,7 +142,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub fn analyze(mut self) -> Result<SymbolTable, Vec<SemanticError>> {
+    pub fn analyze(mut self) -> Result<SymbolTable, (Vec<SemanticError>, Vec<String>)> {
         // Walk the AST
         for stmt in &self.ast.statements {
             self.resolve_stmt(stmt);
@@ -140,8 +155,27 @@ impl<'a> Resolver<'a> {
                 extern_bindings: self.extern_bindings,
             })
         } else {
-            Err(self.errors)
+            let known_vars = self.known_variables();
+            Err((self.errors, known_vars))
         }
+    }
+
+    /// Get all known variable names for "did you mean?" suggestions.
+    fn known_variables(&self) -> Vec<String> {
+        let mut vars = Vec::new();
+
+        // Collect temp variables from all scopes
+        for scope in &self.scopes {
+            vars.extend(scope.variables.keys().cloned());
+        }
+
+        // Collect save variables
+        vars.extend(self.save_vars.keys().cloned());
+
+        // Collect extern variables
+        vars.extend(self.extern_vars.keys().cloned());
+
+        vars
     }
 
     fn resolve_stmt(&mut self, stmt: &Stmt) {
@@ -204,38 +238,53 @@ impl<'a> Resolver<'a> {
         }
     }
 
+    /// Check if a variable name conflicts with save or extern variables.
+    /// Returns the span of the conflicting declaration, if any.
+    fn find_global_conflict(&self, name: &str) -> Option<Span> {
+        if let Some(info) = self.save_vars.get(name) {
+            return Some(info.span);
+        }
+        if let Some(info) = self.extern_vars.get(name) {
+            return Some(info.span);
+        }
+        None
+    }
+
+    /// Check if a variable name conflicts with any temp variable in the given scopes.
+    /// Returns the span of the conflicting declaration, if any.
+    fn find_temp_conflict<'b>(
+        &self,
+        name: &str,
+        scopes: impl Iterator<Item = &'b Scope>,
+    ) -> Option<Span> {
+        for scope in scopes {
+            if let Some(info) = scope.variables.get(name) {
+                return Some(info.span);
+            }
+        }
+        None
+    }
+
     /// Declare a temp variable in the current (innermost) scope
     fn declare_temp(&mut self, id: NodeId, name: &str, span: Span) {
-        // Check for conflict with save variables (file-global)
-        if let Some(save_info) = self.save_vars.get(name) {
+        // Check for conflict with save/extern variables (file-global)
+        if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
                 name: name.to_string(),
                 span,
-                original: save_info.span,
+                original,
             });
             return;
         }
 
-        // Check for conflict with extern variables (file-global)
-        if let Some(extern_info) = self.extern_vars.get(name) {
+        // Check for shadowing - search outer scopes (skip current)
+        if let Some(original) = self.find_temp_conflict(name, self.scopes.iter().rev().skip(1)) {
             self.errors.push(SemanticError::Shadowing {
                 name: name.to_string(),
                 span,
-                original: extern_info.span,
+                original,
             });
             return;
-        }
-
-        // Check for shadowing - search outer scopes
-        for scope in self.scopes.iter().rev().skip(1) {
-            if let Some(var_info) = scope.variables.get(name) {
-                self.errors.push(SemanticError::Shadowing {
-                    name: name.to_string(),
-                    span,
-                    original: var_info.span,
-                });
-                return;
-            }
         }
 
         // Check current scope for redeclaration
@@ -264,36 +313,24 @@ impl<'a> Resolver<'a> {
 
     /// Declare a save variable (file-global, uses external storage)
     fn declare_save(&mut self, id: NodeId, name: &str, span: Span) {
-        // Check for conflict with existing save variable
-        if let Some(save_info) = self.save_vars.get(name) {
+        // Check for conflict with save/extern variables (file-global)
+        if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
                 name: name.to_string(),
                 span,
-                original: save_info.span,
-            });
-            return;
-        }
-
-        // Check for conflict with extern variables (file-global)
-        if let Some(extern_info) = self.extern_vars.get(name) {
-            self.errors.push(SemanticError::Shadowing {
-                name: name.to_string(),
-                span,
-                original: extern_info.span,
+                original,
             });
             return;
         }
 
         // Check for conflict with any temp variable in any scope
-        for scope in &self.scopes {
-            if let Some(var_info) = scope.variables.get(name) {
-                self.errors.push(SemanticError::Shadowing {
-                    name: name.to_string(),
-                    span,
-                    original: var_info.span,
-                });
-                return;
-            }
+        if let Some(original) = self.find_temp_conflict(name, self.scopes.iter()) {
+            self.errors.push(SemanticError::Shadowing {
+                name: name.to_string(),
+                span,
+                original,
+            });
+            return;
         }
 
         // Register the save variable (file-global)
@@ -306,36 +343,24 @@ impl<'a> Resolver<'a> {
 
     /// Declare an extern variable (file-global, read-only, host-provided)
     fn declare_extern(&mut self, _id: NodeId, name: &str, span: Span) {
-        // Check for conflict with existing extern variable (redeclaration)
-        if let Some(extern_info) = self.extern_vars.get(name) {
+        // Check for conflict with save/extern variables (file-global)
+        if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
                 name: name.to_string(),
                 span,
-                original: extern_info.span,
-            });
-            return;
-        }
-
-        // Check for conflict with save variables
-        if let Some(save_info) = self.save_vars.get(name) {
-            self.errors.push(SemanticError::Shadowing {
-                name: name.to_string(),
-                span,
-                original: save_info.span,
+                original,
             });
             return;
         }
 
         // Check for conflict with any temp variable in any scope
-        for scope in &self.scopes {
-            if let Some(var_info) = scope.variables.get(name) {
-                self.errors.push(SemanticError::Shadowing {
-                    name: name.to_string(),
-                    span,
-                    original: var_info.span,
-                });
-                return;
-            }
+        if let Some(original) = self.find_temp_conflict(name, self.scopes.iter()) {
+            self.errors.push(SemanticError::Shadowing {
+                name: name.to_string(),
+                span,
+                original,
+            });
+            return;
         }
 
         // Register the extern variable (file-global)
