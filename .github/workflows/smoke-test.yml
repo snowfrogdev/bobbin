@@ -1,0 +1,9 @@
+name: Smoke Test
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    uses: ./.github/workflows/build-and-test.yml
