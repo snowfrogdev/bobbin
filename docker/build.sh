@@ -59,11 +59,17 @@ case "$TARGET" in
         export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$EMSDK/upstream/emscripten/cache/sysroot"
         # Set rustflags for WASM target (side module for Godot)
         export CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS="-C link-args=-pthread -C target-feature=+atomics -C link-args=-sSIDE_MODULE=2 -C panic=abort -Zlink-native-libraries=no -Cllvm-args=-enable-emscripten-cxx-exceptions=0"
-        # WASM always builds debug (nightly required for build-std)
+        # Use 'wasm' profile (size-optimized, no LTO - LTO + build-std exceeds CI memory)
         cargo +nightly build --manifest-path bindings/godot/Cargo.toml \
-            --target-dir target -Zbuild-std=std,panic_abort --target wasm32-unknown-emscripten
+            --target-dir target --profile wasm -Zbuild-std=std,panic_abort --target wasm32-unknown-emscripten
+        # Run wasm-opt for aggressive size optimization (more efficient than LTO for WASM)
+        WASM_FILE="target/wasm32-unknown-emscripten/wasm/bobbin_godot.wasm"
+        echo "Before wasm-opt: $(du -h "$WASM_FILE" | cut -f1)"
+        wasm-opt -Oz --enable-threads --enable-bulk-memory "$WASM_FILE" -o "$WASM_FILE.opt"
+        mv "$WASM_FILE.opt" "$WASM_FILE"
+        echo "After wasm-opt:  $(du -h "$WASM_FILE" | cut -f1)"
         # WASM uses fixed name (no .debug suffix) - gdext expects 'bobbin_godot.wasm' at runtime
-        cp target/wasm32-unknown-emscripten/debug/bobbin_godot.wasm "$BIN_DIR/bobbin_godot.wasm"
+        cp "$WASM_FILE" "$BIN_DIR/bobbin_godot.wasm"
         ;;
     linux)
         cargo +nightly build --manifest-path bindings/godot/Cargo.toml --target-dir target $CARGO_PROFILE_FLAG
