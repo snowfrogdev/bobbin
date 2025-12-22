@@ -13,6 +13,7 @@
   <a href="https://github.com/snowfrogdev/bobbin/actions/workflows/build-and-test.yml"><img src="https://github.com/snowfrogdev/bobbin/actions/workflows/build-and-test.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/snowfrogdev/bobbin/releases"><img src="https://img.shields.io/github/v/release/snowfrogdev/bobbin?label=Release" alt="Release"></a>
   <a href="https://godotengine.org"><img src="https://img.shields.io/badge/Godot-4.3+-478CBF?logo=godotengine&logoColor=white" alt="Godot 4.3+"></a>
+  <a href="https://deepwiki.com/snowfrogdev/bobbin"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 > **WARNING:** Bobbin is in early development... You should expect:
