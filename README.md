@@ -93,6 +93,7 @@ while runtime.has_more():
 - Character/speaker management
 - Localization support
 - Event triggering/callbacks
+- Language Server Protocol (LSP) support for Godot and VSCode
 
 ## Contributing
 
