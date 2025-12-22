@@ -18,6 +18,8 @@ jobs:
   release:
     needs: build-and-test
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download addon artifact
         uses: actions/download-artifact@v4
