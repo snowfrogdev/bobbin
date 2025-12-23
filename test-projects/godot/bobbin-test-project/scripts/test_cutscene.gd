@@ -21,6 +21,7 @@ var _host_state: Dictionary = {
 	"player_gold": 150
 }
 
+var _runtime: BobbinRuntime
 var _is_active: bool = false
 var _choice_buttons: Array[Button] = []
 var _selected_choice_index: int = 0
@@ -49,7 +50,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	# Handle choice navigation with keyboard when choices are visible
-	if Bobbin.is_waiting_for_choice():
+	if _runtime.is_waiting_for_choice():
 		if event is InputEventKey and event.pressed and not event.echo:
 			match event.keycode:
 				KEY_UP, KEY_W:
@@ -75,7 +76,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _on_dialog_panel_input(event: InputEvent) -> void:
-	if not _is_active or Bobbin.is_waiting_for_choice():
+	if not _is_active or _runtime.is_waiting_for_choice():
 		return
 
 	if event is InputEventMouseButton:
@@ -85,14 +86,29 @@ func _on_dialog_panel_input(event: InputEvent) -> void:
 
 
 func _start_cutscene() -> void:
-	Bobbin.start_with_host("res://dialog/feature_showcase.bobbin", _host_state)
+	_runtime = Bobbin.create_with_host("res://dialog/feature_showcase.bobbin", _host_state)
+
+	# Connect hot reload signals (debug builds only)
+	if OS.is_debug_build():
+		_runtime.reloaded.connect(_on_dialogue_reloaded)
+		_runtime.reload_failed.connect(_on_dialogue_reload_failed)
+
 	_show_current_content()
 	_is_active = true
 
 
+func _on_dialogue_reloaded() -> void:
+	print("Hot reload: Dialogue restarted from beginning")
+	_show_current_content()
+
+
+func _on_dialogue_reload_failed(error: String) -> void:
+	push_error("Hot reload failed: " + error)
+
+
 func _on_advance_requested() -> void:
-	if Bobbin.has_more():
-		Bobbin.advance()
+	if _runtime.has_more():
+		_runtime.advance()
 		_show_current_content()
 	else:
 		_finish_cutscene()
@@ -100,7 +116,7 @@ func _on_advance_requested() -> void:
 
 func _show_current_content() -> void:
 	_update_status_display()
-	if Bobbin.is_waiting_for_choice():
+	if _runtime.is_waiting_for_choice():
 		_show_choices()
 	else:
 		_show_line()
@@ -111,14 +127,14 @@ func _update_status_display() -> void:
 	text += "player_name: %s\n" % _host_state.get("player_name")
 	text += "player_gold: %d\n" % _host_state.get("player_gold")
 	text += "\n=== Save Variables ===\n"
-	var vars := Bobbin.get_all_variables()
+	var vars := _runtime.get_all_variables()
 	for key in vars:
 		text += "%s: %s\n" % [key, str(vars[key])]
 	_status_label.text = text
 
 
 func _show_line() -> void:
-	_last_line = Bobbin.current_line()
+	_last_line = _runtime.current_line()
 	_dialog_label.text = _last_line
 	_continue_indicator.show()
 	_choices_container.hide()
@@ -136,7 +152,7 @@ func _show_choices() -> void:
 	_choice_buttons.clear()
 
 	# Create buttons for each choice
-	var choices := Bobbin.current_choices()
+	var choices := _runtime.current_choices()
 	for i in choices.size():
 		var button := Button.new()
 		button.text = choices[i]
@@ -168,7 +184,7 @@ func _select_current_choice() -> void:
 
 
 func _on_choice_selected(index: int) -> void:
-	Bobbin.select_choice(index)
+	_runtime.select_choice(index)
 
 	# Clear choice UI
 	for button in _choice_buttons:
@@ -190,23 +206,23 @@ func _finish_cutscene() -> void:
 # Button handlers for game-side variable updates
 func _on_add_gold_pressed() -> void:
 	_host_state["player_gold"] = _host_state.get("player_gold", 0) + 10
-	Bobbin.update_host_variable("player_gold", _host_state["player_gold"])
+	_runtime.update_host_variable("player_gold", _host_state["player_gold"])
 	_update_status_display()
 
 
 func _on_remove_gold_pressed() -> void:
 	_host_state["player_gold"] = max(0, _host_state.get("player_gold", 0) - 10)
-	Bobbin.update_host_variable("player_gold", _host_state["player_gold"])
+	_runtime.update_host_variable("player_gold", _host_state["player_gold"])
 	_update_status_display()
 
 
 func _on_add_rep_pressed() -> void:
-	var current_rep: int = Bobbin.get_variable("reputation")
-	Bobbin.set_variable("reputation", current_rep + 10)
+	var current_rep: int = _runtime.get_variable("reputation")
+	_runtime.set_variable("reputation", current_rep + 10)
 	_update_status_display()
 
 
 func _on_remove_rep_pressed() -> void:
-	var current_rep: int = Bobbin.get_variable("reputation")
-	Bobbin.set_variable("reputation", max(0, current_rep - 10))
+	var current_rep: int = _runtime.get_variable("reputation")
+	_runtime.set_variable("reputation", max(0, current_rep - 10))
 	_update_status_display()

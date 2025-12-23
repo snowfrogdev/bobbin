@@ -27,26 +27,23 @@ Hello, {player_name}!
 ## Using in Godot
 
 ```gdscript
-# Simple API (single dialogue)
-Bobbin.start("res://dialogue/intro.bobbin")
+# Create a runtime
+var runtime = Bobbin.create("res://dialogue/intro.bobbin")
 
-while Bobbin.has_more():
-    if Bobbin.is_waiting_for_choice():
-        var choices = Bobbin.current_choices()
+while runtime.has_more():
+    if runtime.is_waiting_for_choice():
+        var choices = runtime.current_choices()
         # Show choices to player, get their selection...
-        Bobbin.select_choice(selection)
+        runtime.select_choice(selection)
     else:
-        print(Bobbin.current_line())
-        Bobbin.advance()
+        print(runtime.current_line())
+        runtime.advance()
 
 # With host state (pass game variables to dialogue)
-Bobbin.start_with_host("res://dialogue/intro.bobbin", {
+var runtime = Bobbin.create_with_host("res://dialogue/intro.bobbin", {
     "player_name": "Hero",
     "gold": 100
 })
-
-# Create independent runtimes for multiple concurrent dialogues
-var runtime = Bobbin.create("res://dialogue/npc.bobbin")
 ```
 
 ## Editor Settings
