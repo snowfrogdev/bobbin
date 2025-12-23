@@ -1,9 +1,10 @@
 use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
 use godot::classes::{
     Engine, FileAccess, IResourceFormatLoader, IResourceFormatSaver, IScriptExtension,
-    IScriptLanguageExtension, Resource, ResourceFormatLoader, ResourceFormatSaver, ResourceLoader,
-    ResourceSaver, Script, ScriptExtension, ScriptLanguage, ScriptLanguageExtension,
-    file_access::ModeFlags, script_language::ScriptNameCasing,
+    IScriptLanguageExtension, Os, Resource, ResourceFormatLoader, ResourceFormatSaver,
+    ResourceLoader, ResourceSaver, Script, ScriptExtension, ScriptLanguage,
+    ScriptLanguageExtension, SceneTree, Timer,
+    file_access::ModeFlags, resource_loader::CacheMode, script_language::ScriptNameCasing,
 };
 use godot::meta::RawPtr;
 use godot::prelude::*;
@@ -755,6 +756,11 @@ pub struct BobbinRuntime {
     storage: Arc<MemoryStorage>,
     host: Arc<VarDictionaryHostState>,
     inner: Runtime,
+
+    // Hot reload support (debug builds only)
+    source_path: Option<GString>,  // None if created via from_string()
+    last_modified: u64,            // File modification timestamp
+    poll_timer: Option<Gd<Timer>>, // Self-managed polling timer
 }
 
 #[godot_api]
@@ -766,7 +772,7 @@ impl BobbinRuntime {
         Self::from_string_with_host(content, VarDictionary::new())
     }
 
-    /// Create runtime with host state VarDictionary.
+    /// Create runtime with host state Dictionary.
     #[func]
     fn from_string_with_host(content: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
         let storage = Arc::new(MemoryStorage::new());
@@ -781,6 +787,9 @@ impl BobbinRuntime {
                 storage,
                 host,
                 inner: runtime,
+                source_path: None,
+                last_modified: 0,
+                poll_timer: None,
             })),
             Err(e) => {
                 godot_error!(
@@ -788,6 +797,213 @@ impl BobbinRuntime {
                     e.render("<script>", &content.to_string())
                 );
                 None
+            }
+        }
+    }
+
+    /// Create runtime from a .bobbin file path.
+    #[func]
+    fn from_file(path: GString) -> Option<Gd<Self>> {
+        Self::from_file_with_host(path, VarDictionary::new())
+    }
+
+    /// Create runtime from a .bobbin file path with host state.
+    #[func]
+    fn from_file_with_host(path: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
+        // Load BobbinScript resource
+        let Some(resource) = ResourceLoader::singleton()
+            .load_ex(&path)
+            .type_hint("BobbinScript")
+            .done()
+        else {
+            godot_error!("BobbinRuntime::from_file: Failed to load {}", path);
+            return None;
+        };
+
+        let Ok(script) = resource.try_cast::<BobbinScript>() else {
+            godot_error!("BobbinRuntime::from_file: {} is not a BobbinScript", path);
+            return None;
+        };
+
+        let source = script.bind().get_source_code().to_string();
+        let storage = Arc::new(MemoryStorage::new());
+        let host = Arc::new(VarDictionaryHostState::from_dictionary(&host_state));
+
+        let storage_dyn: Arc<dyn VariableStorage> = storage.clone();
+        let host_dyn: Arc<dyn HostState> = host.clone();
+
+        match Runtime::new(&source, storage_dyn, host_dyn) {
+            Ok(runtime) => {
+                // Get initial modification time and setup hot reload (debug builds only)
+                let (source_path, last_modified) = if Os::singleton().is_debug_build() {
+                    let modified = FileAccess::get_modified_time(&path);
+                    (Some(path), modified)
+                } else {
+                    (None, 0)
+                };
+
+                let mut instance = Gd::from_init_fn(|base| Self {
+                    base,
+                    storage,
+                    host,
+                    inner: runtime,
+                    source_path,
+                    last_modified,
+                    poll_timer: None,
+                });
+
+                // Start hot reload polling (debug only, requires scene tree)
+                instance.bind_mut().start_hot_reload();
+
+                Some(instance)
+            }
+            Err(e) => {
+                godot_error!(
+                    "Failed to create runtime:\n{}",
+                    e.render(&path.to_string(), &source)
+                );
+                None
+            }
+        }
+    }
+
+    // =========================================================================
+    // Hot Reload
+    // =========================================================================
+
+    #[signal]
+    fn reloaded();
+
+    #[signal]
+    fn reload_failed(error_message: GString);
+
+    /// Reload with new source code. Preserves save variables.
+    #[func]
+    fn reload(&mut self, new_source: GString) -> bool {
+        let source_str = new_source.to_string();
+        let path_str = self
+            .source_path
+            .as_ref()
+            .map(|p| p.to_string())
+            .unwrap_or_else(|| "<script>".to_string());
+
+        let storage_dyn: Arc<dyn VariableStorage> = self.storage.clone();
+        let host_dyn: Arc<dyn HostState> = self.host.clone();
+
+        match Runtime::new(&source_str, storage_dyn, host_dyn) {
+            Ok(new_runtime) => {
+                self.inner = new_runtime;
+                self.base_mut()
+                    .emit_signal(&StringName::from("reloaded"), &[]);
+                true
+            }
+            Err(e) => {
+                let error_msg = e.render(&path_str, &source_str);
+                godot_error!("Hot reload failed:\n{}", error_msg);
+                self.base_mut().emit_signal(
+                    &StringName::from("reload_failed"),
+                    &[Variant::from(GString::from(error_msg.as_str()))],
+                );
+                false
+            }
+        }
+    }
+
+    /// Check if source file changed and reload if needed.
+    /// Called automatically by the internal Timer. Can also be called manually.
+    #[func]
+    fn check_for_reload(&mut self) {
+        // Skip in release builds
+        if !Os::singleton().is_debug_build() {
+            return;
+        }
+
+        // Skip if no source path (created via from_string)
+        let Some(path) = &self.source_path else {
+            return;
+        };
+
+        // Check modification time
+        let current_modified = FileAccess::get_modified_time(path);
+        if current_modified == self.last_modified {
+            return; // No change
+        }
+
+        // File changed - reload
+        self.last_modified = current_modified;
+
+        // Load fresh BobbinScript via ResourceLoader (bypasses cache)
+        let Some(resource) = ResourceLoader::singleton()
+            .load_ex(path)
+            .type_hint("BobbinScript")
+            .cache_mode(CacheMode::REPLACE)
+            .done()
+        else {
+            godot_error!("Hot reload: Failed to load {}", path);
+            return;
+        };
+
+        let Ok(script) = resource.try_cast::<BobbinScript>() else {
+            godot_error!("Hot reload: {} is not a BobbinScript", path);
+            return;
+        };
+
+        // Reload with new source
+        let new_source = script.bind().get_source_code();
+        godot_print!("Hot reload: Reloading {}", path);
+        self.reload(new_source);
+    }
+
+    /// Start the hot reload polling timer (debug builds only).
+    /// Called automatically by from_file(). No-op if already started or in release.
+    #[func]
+    fn start_hot_reload(&mut self) {
+        // Skip in release builds or if no source path
+        if !Os::singleton().is_debug_build() || self.source_path.is_none() {
+            return;
+        }
+
+        // Skip if timer already exists
+        if self.poll_timer.is_some() {
+            return;
+        }
+
+        // Create and configure timer
+        let mut timer = Timer::new_alloc();
+        timer.set_wait_time(0.5);
+        timer.set_one_shot(false);
+        timer.set_autostart(true); // Start automatically when added to tree
+
+        // Connect timeout signal to our polling method
+        let callable = self.base().callable(&StringName::from("check_for_reload"));
+        timer.connect(&StringName::from("timeout"), &callable);
+
+        // Add timer to scene tree so it can tick
+        // Use call_deferred to avoid "busy setting up children" error during _ready()
+        if let Some(tree) = Engine::singleton()
+            .get_main_loop()
+            .and_then(|ml| ml.try_cast::<SceneTree>().ok())
+        {
+            if let Some(mut root) = tree.get_root() {
+                root.call_deferred("add_child", &[timer.to_variant()]);
+                self.poll_timer = Some(timer);
+            } else {
+                godot_warn!("Hot reload: Could not access scene root, polling disabled");
+                timer.free();
+            }
+        } else {
+            godot_warn!("Hot reload: Could not access scene tree, polling disabled");
+            timer.free();
+        }
+    }
+
+    /// Stop hot reload polling and clean up timer.
+    #[func]
+    fn stop_hot_reload(&mut self) {
+        if let Some(mut timer) = self.poll_timer.take() {
+            timer.stop();
+            if timer.is_inside_tree() {
+                timer.queue_free();
             }
         }
     }
