@@ -2,28 +2,35 @@ use std::fmt;
 use std::sync::Arc;
 
 use crate::compiler::{CompileError, Compiler};
-use crate::diagnostic::{DiagnosticContext, IntoDiagnostic, JaroWinklerMatcher};
-use crate::parser::{ParseError, Parser};
-use crate::resolver::{Resolver, SemanticError};
-use crate::scanner::Scanner;
 use crate::vm::{StepResult, VM};
 
+// Re-export syntax crate types for backward compatibility
+pub use bobbin_syntax::{
+    validate, AriadneRenderer, Diagnostic, DiagnosticContext, IntoDiagnostic,
+    JaroWinklerMatcher, Label, LabelStyle, LexicalError, LineIndex, Matcher, ParseError, Parser,
+    Renderer, Resolver, Scanner, SemanticError, Severity, SourcePosition, Span, Suggestion,
+    SymbolTable, Token, TokenKind,
+};
+// Re-export local types
 pub use crate::chunk::Value;
 pub use crate::storage::{HostState, VariableStorage};
 pub use crate::vm::RuntimeError;
 
-mod ast;
+// Keep diagnostic and token modules as public for backward compatibility
+pub mod diagnostic {
+    pub use bobbin_syntax::{
+        AriadneRenderer, Diagnostic, DiagnosticContext, IntoDiagnostic, JaroWinklerMatcher, Label,
+        LabelStyle, LineIndex, Matcher, Renderer, Severity, SourcePosition, Suggestion,
+    };
+}
+pub mod token {
+    pub use bobbin_syntax::{Span, Token, TokenKind};
+}
+
 mod chunk;
 mod compiler;
-pub mod diagnostic;
-mod parser;
-mod resolver;
-mod scanner;
 mod storage;
-pub mod token;
 mod vm;
-
-pub use diagnostic::{AriadneRenderer, Diagnostic, Renderer};
 
 #[derive(Debug, Clone)]
 pub enum BobbinError {

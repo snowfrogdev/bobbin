@@ -1,6 +1,6 @@
-use crate::ast::{Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
+use bobbin_syntax::{Literal, NodeId, Script, Stmt, SymbolTable, TextPart, VarBindingData};
+
 use crate::chunk::{Chunk, Instruction, Value};
-use crate::resolver::SymbolTable;
 
 #[derive(Debug, Clone)]
 pub enum CompileError {}

@@ -50,11 +50,19 @@ name = "bobbin-godot"
 version = "0.1.0"
 dependencies = [
  "bobbin-runtime",
+ "bobbin-syntax",
  "godot",
 ]
 
 [[package]]
 name = "bobbin-runtime"
+version = "0.1.0"
+dependencies = [
+ "bobbin-syntax",
+]
+
+[[package]]
+name = "bobbin-syntax"
 version = "0.1.0"
 dependencies = [
  "ariadne",

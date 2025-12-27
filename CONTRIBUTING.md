@@ -47,15 +47,15 @@ Artifacts are automatically copied to `bindings/godot/addons/bobbin/bin/`.
 
 ### Build Options
 
-| Target | Debug | Release | Notes |
-|--------|-------|---------|-------|
-| windows | `.debug.dll` | `.dll` | Cross-compiled via mingw-w64 |
-| linux | `.debug.so` | `.so` | Native Linux build |
-| wasm | `.wasm` | `.wasm` | Debug only; fixed name required by gdext |
-| all | All targets | All targets | Builds all platforms × all types by default |
+| Target  | Debug        | Release     | Notes                                       |
+| ------- | ------------ | ----------- | ------------------------------------------- |
+| windows | `.debug.dll` | `.dll`      | Cross-compiled via mingw-w64                |
+| linux   | `.debug.so`  | `.so`       | Native Linux build                          |
+| wasm    | `.wasm`      | `.wasm`     | Debug only; fixed name required by gdext    |
+| all     | All targets  | All targets | Builds all platforms × all types by default |
 
-| Flag | Effect |
-|------|--------|
+| Flag   | Effect                                                  |
+| ------ | ------------------------------------------------------- |
 | `--ci` | Use optimized profiles (slower build, smaller binaries) |
 
 **Notes:**
@@ -149,13 +149,66 @@ undefined
 name
 ```
 
+## Editor Tooling Development
+
+Bobbin includes an LSP server and VS Code extension for editor support.
+
+### LSP Server
+
+The language server lives in `lsp/` and provides diagnostics to any LSP-compatible editor.
+
+```bash
+# Build and install
+cargo install --path lsp
+
+# Or just build for development
+cd lsp && cargo build
+```
+
+### VS Code Extension
+
+The extension lives in `editors/vscode/`.
+
+**Setup:**
+
+```bash
+cd editors/vscode
+npm install
+npm run compile
+```
+
+**Running (choose one):**
+
+1. **Extension Development Host** — Press `F5` with the extension folder open, or select "Run Bobbin Extension" from the debug dropdown at the repo root.
+
+2. **Install in your VS Code** — Link the extension into your extensions folder:
+
+   **Windows (CMD):**
+
+   ```cmd
+   mklink /J "%USERPROFILE%\.vscode\extensions\bobbin-vscode" "C:\path\to\bobbin\editors\vscode"
+   ```
+
+   **macOS/Linux:**
+
+   ```bash
+   ln -s /path/to/bobbin/editors/vscode ~/.vscode/extensions/bobbin-vscode
+   ```
+
+   Then reload VS Code (`Ctrl+Shift+P` → "Reload Window").
+
+**After changes:**
+
+- TypeScript changes: `npm run compile` then reload VS Code
+- LSP changes: `cargo install --path lsp` then reload VS Code
+
 ## Releasing
 
 ### Godot Addon
 
 Releases are automated via GitHub Actions. There are two ways to trigger a release:
 
-**Option 1: Tag push (recommended)**
+#### Option 1: Tag push (recommended)
 
 ```bash
 # Update version in bindings/godot/Cargo.toml, then:
@@ -163,7 +216,7 @@ git tag godot-addon-v1.0.0
 git push origin godot-addon-v1.0.0
 ```
 
-**Option 2: Manual dispatch**
+#### Option 2: Manual dispatch
 
 1. Go to Actions → "Release Godot Addon"
 2. Click "Run workflow"

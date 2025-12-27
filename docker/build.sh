@@ -47,10 +47,16 @@ if [ "$CI_MODE" = true ]; then
     CI_FLAG="--ci"
 fi
 
+# Enable editor-tooling feature for debug builds (provides validate() for Godot editor)
+FEATURES=""
+if [ "$BUILD_TYPE" != "release" ]; then
+    FEATURES="--features editor-tooling"
+fi
+
 case "$TARGET" in
     windows)
         cargo +nightly build --manifest-path bindings/godot/Cargo.toml \
-            --target-dir target --target x86_64-pc-windows-gnu $CARGO_PROFILE_FLAG
+            --target-dir target --target x86_64-pc-windows-gnu $FEATURES $CARGO_PROFILE_FLAG
         cp target/x86_64-pc-windows-gnu/$PROFILE/bobbin_godot.dll "$BIN_DIR/bobbin_godot$SUFFIX.dll"
         ;;
     wasm)
@@ -73,7 +79,7 @@ case "$TARGET" in
         cp "$WASM_FILE" "$BIN_DIR/bobbin_godot.wasm"
         ;;
     linux)
-        cargo +nightly build --manifest-path bindings/godot/Cargo.toml --target-dir target $CARGO_PROFILE_FLAG
+        cargo +nightly build --manifest-path bindings/godot/Cargo.toml --target-dir target $FEATURES $CARGO_PROFILE_FLAG
         cp target/$PROFILE/libbobbin_godot.so "$BIN_DIR/libbobbin_godot$SUFFIX.so"
         ;;
     all)
