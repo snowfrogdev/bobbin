@@ -16,6 +16,13 @@ dependencies = [
 name = "bobbin-runtime"
 version = "0.1.0"
 dependencies = [
+ "bobbin-syntax",
+]
+
+[[package]]
+name = "bobbin-syntax"
+version = "0.1.0"
+dependencies = [
  "ariadne",
  "strsim",
 ]

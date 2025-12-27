@@ -8,7 +8,7 @@ temp greeting = "Welcome"
 
 set visit_count = 1
 
-{greeting}, {player_name}! This is visit number {visit_count}.
+{greeting}, {player_ame}! This is visit number {visit_count}.
 I see you have {player_gold} gold coins.
 Your reputation is {reputation}.
 
