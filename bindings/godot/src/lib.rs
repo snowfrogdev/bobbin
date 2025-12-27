@@ -7,11 +7,12 @@ use godot::classes::{
     file_access::ModeFlags, resource_loader::CacheMode, script_language::ScriptNameCasing,
 };
 
-// NOTE: EditorSyntaxHighlighter is currently broken in gdext - virtual methods
-// like _get_name() are not dispatched to Rust implementations. See:
-// https://github.com/godot-rust/gdext/issues/XXXX (to be filed)
-// For now, we rely on get_reserved_words() in ScriptLanguageExtension which
-// provides basic keyword highlighting via the Standard highlighter.
+#[cfg(feature = "editor-tooling")]
+use godot::classes::{
+    EditorInterface, EditorPlugin, EditorSyntaxHighlighter,
+    IEditorPlugin, IEditorSyntaxHighlighter,
+};
+
 use godot::meta::RawPtr;
 use godot::prelude::*;
 use std::collections::HashMap;
@@ -806,6 +807,124 @@ impl IResourceFormatSaver for BobbinSaver {
         godot::global::Error::OK
     }
 }
+
+// =============================================================================
+// BobbinSyntaxHighlighter - Custom syntax highlighting for .bobbin files
+// =============================================================================
+
+#[derive(GodotClass)]
+#[class(tool, init, base=EditorSyntaxHighlighter)]
+#[cfg(feature = "editor-tooling")]
+pub struct BobbinSyntaxHighlighter {
+    base: Base<EditorSyntaxHighlighter>,
+}
+
+#[cfg(feature = "editor-tooling")]
+#[godot_api]
+impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
+    fn create(&self) -> Option<Gd<EditorSyntaxHighlighter>> {
+        Some(self.to_gd().upcast())
+    }
+    
+    fn get_name(&self) -> GString {
+        GString::from("Bobbin")
+    }
+
+    fn get_supported_languages(&self) -> PackedStringArray {
+        let mut arr = PackedStringArray::new();
+        arr.push(&GString::from("Bobbin"));
+        arr
+    }
+
+    fn get_line_syntax_highlighting(&self, line: i32) -> VarDictionary {
+        use bobbin_syntax::{Scanner, TokenKind};
+
+        let mut result = VarDictionary::new();
+
+        let Some(text_edit) = self.base().get_text_edit() else {
+            return result;
+        };
+
+        let line_text = text_edit.get_line(line).to_string();
+        if line_text.is_empty() {
+            return result;
+        }
+
+        // Colors matching VS Code extension
+        let keyword_color = Color::from_rgb(0.86, 0.44, 0.58);  // Pink
+        let string_color = Color::from_rgb(0.60, 0.80, 0.60);   // Green
+        let number_color = Color::from_rgb(0.69, 0.80, 0.90);   // Light blue
+        let comment_color = Color::from_rgb(0.50, 0.50, 0.50);  // Gray
+        let variable_color = Color::from_rgb(0.60, 0.70, 0.90); // Blue
+        let interp_color = Color::from_rgb(0.80, 0.60, 0.80);   // Purple
+
+        // Handle comments
+        if let Some(pos) = line_text.find("//") {
+            let mut entry = VarDictionary::new();
+            entry.set("color", comment_color);
+            result.set(pos as i64, entry);
+            return result;
+        }
+
+        // Tokenize using bobbin-syntax Scanner
+        let scanner = Scanner::new(&line_text);
+        for token in scanner.tokens().flatten() {
+            let color = match token.kind {
+                TokenKind::Temp | TokenKind::Save | TokenKind::Set | TokenKind::Extern => keyword_color,
+                TokenKind::True | TokenKind::False => keyword_color,
+                TokenKind::String => string_color,
+                TokenKind::Number => number_color,
+                TokenKind::Identifier => variable_color,
+                TokenKind::OpenBrace | TokenKind::CloseBrace => interp_color,
+                _ => continue,
+            };
+
+            let mut entry = VarDictionary::new();
+            entry.set("color", color);
+            result.set(token.span.start as i64, entry);
+        }
+
+        result
+    }
+}
+
+// =============================================================================
+// BobbinEditorPlugin - Registers the syntax highlighter with the editor
+// =============================================================================
+
+#[derive(GodotClass)]
+#[class(tool, init, base=EditorPlugin)]
+#[cfg(feature = "editor-tooling")]
+pub struct BobbinEditorPlugin {
+    base: Base<EditorPlugin>,
+    highlighter: Option<Gd<BobbinSyntaxHighlighter>>,
+}
+
+#[cfg(feature = "editor-tooling")]
+#[godot_api]
+impl IEditorPlugin for BobbinEditorPlugin {
+    fn enter_tree(&mut self) {
+        let highlighter = Gd::from_init_fn(|base| BobbinSyntaxHighlighter { base });
+
+        if let Some(mut script_editor) = EditorInterface::singleton().get_script_editor() {
+            script_editor.register_syntax_highlighter(&highlighter);
+            self.highlighter = Some(highlighter);
+            godot_print!("[Bobbin] Syntax highlighter registered");
+        }
+    }
+
+    fn exit_tree(&mut self) {
+        if let Some(highlighter) = self.highlighter.take() {
+            if let Some(mut script_editor) = EditorInterface::singleton().get_script_editor() {
+                script_editor.unregister_syntax_highlighter(&highlighter);
+            }
+        }
+    }
+}
+
+// =============================================================================
+// BobbinRuntime - Main API for running Bobbin scripts
+// =============================================================================
 
 #[derive(GodotClass)]
 #[class(base=RefCounted, no_init)]
