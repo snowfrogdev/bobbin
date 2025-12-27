@@ -6,6 +6,12 @@ use godot::classes::{
     ScriptLanguageExtension, SceneTree, Timer,
     file_access::ModeFlags, resource_loader::CacheMode, script_language::ScriptNameCasing,
 };
+
+// NOTE: EditorSyntaxHighlighter is currently broken in gdext - virtual methods
+// like _get_name() are not dispatched to Rust implementations. See:
+// https://github.com/godot-rust/gdext/issues/XXXX (to be filed)
+// For now, we rely on get_reserved_words() in ScriptLanguageExtension which
+// provides basic keyword highlighting via the Standard highlighter.
 use godot::meta::RawPtr;
 use godot::prelude::*;
 use std::collections::HashMap;
@@ -225,7 +231,14 @@ impl IScriptLanguageExtension for BobbinLanguage {
 
     // --- Language features ---
     fn get_reserved_words(&self) -> PackedStringArray {
-        PackedStringArray::new()
+        let mut arr = PackedStringArray::new();
+        arr.push(&GString::from("temp"));
+        arr.push(&GString::from("save"));
+        arr.push(&GString::from("set"));
+        arr.push(&GString::from("extern"));
+        arr.push(&GString::from("true"));
+        arr.push(&GString::from("false"));
+        arr
     }
     fn is_control_flow_keyword(&self, _keyword: GString) -> bool {
         false
@@ -259,16 +272,61 @@ impl IScriptLanguageExtension for BobbinLanguage {
     // --- Code editing ---
     fn validate(
         &self,
-        _script: GString,
+        script: GString,
         _path: GString,
         _validate_functions: bool,
         _validate_errors: bool,
         _validate_warnings: bool,
         _validate_safe_lines: bool,
     ) -> VarDictionary {
-        let mut dict = VarDictionary::new();
-        dict.set("valid", true);
-        dict
+        #[cfg(feature = "editor-tooling")]
+        {
+            use bobbin_syntax::{validate, LineIndex};
+
+            let source = script.to_string();
+            let diagnostics = validate(&source);
+
+            let mut dict = VarDictionary::new();
+            // Always set all expected fields (matching GDScript's validate return)
+            dict.set("functions", Array::<GString>::new());
+            dict.set("warnings", Array::<VarDictionary>::new());
+            dict.set("safe_lines", PackedInt32Array::new());
+
+            if diagnostics.is_empty() {
+                dict.set("valid", true);
+                dict.set("errors", Array::<VarDictionary>::new());
+            } else {
+                dict.set("valid", false);
+                let line_index = LineIndex::new(&source);
+                let mut errors = Array::<VarDictionary>::new();
+                for diag in &diagnostics {
+                    let mut error = VarDictionary::new();
+                    if let Some(label) = diag.primary_label() {
+                        let pos = line_index.line_col(label.span.start);
+                        let line = (pos.line + 1) as i32;
+                        let column = (pos.column + 1) as i32;
+                        error.set("line", line);
+                        error.set("column", column);
+                    } else {
+                        error.set("line", 1i32);
+                        error.set("column", 1i32);
+                    }
+                    error.set("message", GString::from(diag.message.as_str()));
+                    errors.push(&error);
+                }
+                dict.set("errors", errors);
+            }
+            dict
+        }
+
+        #[cfg(not(feature = "editor-tooling"))]
+        {
+            let _ = script; // Silence unused variable warning
+            let _ = path;
+            let mut dict = VarDictionary::new();
+            dict.set("valid", true);
+            dict
+        }
     }
     fn validate_path(&self, _path: GString) -> GString {
         GString::new()
