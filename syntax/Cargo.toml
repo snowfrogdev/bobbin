@@ -1,0 +1,8 @@
+[package]
+name = "bobbin-syntax"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ariadne = "0.4"
+strsim = "0.11"

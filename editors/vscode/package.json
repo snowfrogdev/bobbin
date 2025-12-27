@@ -1,0 +1,73 @@
+{
+  "name": "bobbin-vscode",
+  "displayName": "Bobbin",
+  "description": "Bobbin narrative scripting language support",
+  "version": "0.1.0",
+  "publisher": "bobbin",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:bobbin"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "bobbin",
+        "aliases": [
+          "Bobbin",
+          "bobbin"
+        ],
+        "extensions": [
+          ".bobbin"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bobbin",
+        "scopeName": "source.bobbin",
+        "path": "./syntaxes/bobbin.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Bobbin",
+      "properties": {
+        "bobbin.lsp.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to bobbin-lsp executable (uses bundled or PATH if empty)"
+        },
+        "bobbin.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Bobbin",
+  "scopeName": "source.bobbin",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#declaration" },
+    { "include": "#assignment" },
+    { "include": "#choice" },
+    { "include": "#line" }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.double-slash.bobbin",
+      "match": "//.*$"
+    },
+    "declaration": {
+      "patterns": [
+        {
+          "name": "meta.declaration.save.bobbin",
+          "match": "^\\s*(save)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(=)\\s*(.+)$",
+          "captures": {
+            "1": { "name": "keyword.other.save.bobbin" },
+            "2": { "name": "variable.other.save.bobbin" },
+            "3": { "name": "keyword.operator.assignment.bobbin" },
+            "4": { "patterns": [{ "include": "#value" }] }
+          }
+        },
+        {
+          "name": "meta.declaration.temp.bobbin",
+          "match": "^\\s*(temp)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(=)\\s*(.+)$",
+          "captures": {
+            "1": { "name": "keyword.other.temp.bobbin" },
+            "2": { "name": "variable.other.temp.bobbin" },
+            "3": { "name": "keyword.operator.assignment.bobbin" },
+            "4": { "patterns": [{ "include": "#value" }] }
+          }
+        },
+        {
+          "name": "meta.declaration.extern.bobbin",
+          "match": "^\\s*(extern)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*$",
+          "captures": {
+            "1": { "name": "keyword.other.extern.bobbin" },
+            "2": { "name": "variable.other.extern.bobbin" }
+          }
+        }
+      ]
+    },
+    "assignment": {
+      "name": "meta.assignment.bobbin",
+      "match": "^\\s*(set)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(=)\\s*(.+)$",
+      "captures": {
+        "1": { "name": "keyword.other.set.bobbin" },
+        "2": { "name": "variable.other.bobbin" },
+        "3": { "name": "keyword.operator.assignment.bobbin" },
+        "4": { "patterns": [{ "include": "#value" }] }
+      }
+    },
+    "choice": {
+      "name": "meta.choice.bobbin",
+      "match": "^(\\s*)(-)\\s*(.*)$",
+      "captures": {
+        "2": { "name": "keyword.operator.choice.bobbin" },
+        "3": { "patterns": [{ "include": "#text-content" }] }
+      }
+    },
+    "line": {
+      "name": "meta.line.bobbin",
+      "match": "^(?!\\s*(?:save|temp|extern|set|//|-)\\s)(.+)$",
+      "captures": {
+        "1": { "patterns": [{ "include": "#text-content" }] }
+      }
+    },
+    "text-content": {
+      "patterns": [
+        { "include": "#interpolation" },
+        { "include": "#escaped-brace" }
+      ]
+    },
+    "interpolation": {
+      "name": "meta.interpolation.bobbin",
+      "begin": "\\{",
+      "end": "\\}",
+      "beginCaptures": {
+        "0": { "name": "punctuation.section.interpolation.begin.bobbin" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.section.interpolation.end.bobbin" }
+      },
+      "patterns": [
+        {
+          "name": "variable.other.readwrite.bobbin",
+          "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      ]
+    },
+    "escaped-brace": {
+      "name": "constant.character.escape.bobbin",
+      "match": "\\{\\{|\\}\\}"
+    },
+    "value": {
+      "patterns": [
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#boolean" }
+      ]
+    },
+    "string": {
+      "name": "string.quoted.double.bobbin",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.bobbin" }
+      },
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.bobbin" }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.bobbin",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "number": {
+      "patterns": [
+        {
+          "name": "constant.numeric.float.bobbin",
+          "match": "-?\\d+\\.\\d+"
+        },
+        {
+          "name": "constant.numeric.integer.bobbin",
+          "match": "-?\\d+"
+        }
+      ]
+    },
+    "boolean": {
+      "name": "constant.language.boolean.bobbin",
+      "match": "\\b(true|false)\\b"
+    }
+  }
+}
