@@ -16,7 +16,12 @@ use godot::classes::{
 use godot::meta::RawPtr;
 use godot::prelude::*;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
+
+/// Tracks last reported errors to avoid duplicate output in the Output panel.
+/// Key: file path, Value: hash of error messages
+#[cfg(feature = "editor-tooling")]
+static LAST_REPORTED_ERRORS: Mutex<Option<(String, u64)>> = Mutex::new(None);
 
 struct BobbinExtension;
 
@@ -201,6 +206,9 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn frame(&mut self) {}
     fn thread_enter(&mut self) {}
     fn thread_exit(&mut self) {}
+    fn reload_scripts(&mut self, _scripts: Array<Variant>, _soft_reload: bool) {
+        // Bobbin scripts don't need special reload handling
+    }
 
     // --- Script creation ---
     fn create_script(&self) -> Option<Gd<Object>> {
@@ -274,7 +282,7 @@ impl IScriptLanguageExtension for BobbinLanguage {
     fn validate(
         &self,
         script: GString,
-        _path: GString,
+        path: GString,
         _validate_functions: bool,
         _validate_errors: bool,
         _validate_warnings: bool,
@@ -296,25 +304,81 @@ impl IScriptLanguageExtension for BobbinLanguage {
             if diagnostics.is_empty() {
                 dict.set("valid", true);
                 dict.set("errors", Array::<VarDictionary>::new());
+
+                // Clear last reported errors for this file
+                if let Ok(mut last) = LAST_REPORTED_ERRORS.lock() {
+                    if last.as_ref().is_some_and(|(p, _)| p == &path.to_string()) {
+                        *last = None;
+                    }
+                }
             } else {
                 dict.set("valid", false);
                 let line_index = LineIndex::new(&source);
                 let mut errors = Array::<VarDictionary>::new();
+
+                // Extract filename from path for cleaner output
+                let path_str = path.to_string();
+                let filename = path_str.rsplit('/').next().unwrap_or(&path_str);
+
+                // Build error messages and compute hash for deduplication
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut error_messages: Vec<String> = Vec::new();
+
                 for diag in &diagnostics {
                     let mut error = VarDictionary::new();
                     if let Some(label) = diag.primary_label() {
-                        let pos = line_index.line_col(label.span.start);
-                        let line = (pos.line + 1) as i32;
-                        let column = (pos.column + 1) as i32;
+                        let start_pos = line_index.line_col(label.span.start);
+                        let end_pos = line_index.line_col(label.span.end);
+                        let line = (start_pos.line + 1) as i32;
+                        let start_col = (start_pos.column + 1) as i32;
+                        let end_col = (end_pos.column + 1) as i32;
+
                         error.set("line", line);
-                        error.set("column", column);
+                        error.set("column", start_col);
+                        error.set("start_line", line);
+                        error.set("end_line", (end_pos.line + 1) as i32);
+                        error.set("start_column", start_col);
+                        error.set("end_column", end_col);
+                        error.set("leftmost_column", start_col);
+                        error.set("rightmost_column", end_col);
+
+                        error_messages.push(format!(
+                            "[Bobbin] {}:{}:{} - {}",
+                            filename, line, start_col, diag.message
+                        ));
                     } else {
                         error.set("line", 1i32);
                         error.set("column", 1i32);
-                    }
+                        error_messages.push(format!("[Bobbin] {} - {}", filename, diag.message));
+                    };
                     error.set("message", GString::from(diag.message.as_str()));
                     errors.push(&error);
                 }
+
+                // Only output errors if they've changed (avoid duplicate spam)
+                let mut hasher = DefaultHasher::new();
+                error_messages.hash(&mut hasher);
+                let error_hash = hasher.finish();
+
+                let should_output = if let Ok(mut last) = LAST_REPORTED_ERRORS.lock() {
+                    let changed = last.as_ref().is_none_or(|(p, h)| p != &path_str || *h != error_hash);
+                    if changed {
+                        *last = Some((path_str.clone(), error_hash));
+                    }
+                    changed
+                } else {
+                    true
+                };
+
+                if should_output {
+                    // Render beautiful ASCII-formatted errors like Rust/Elm
+                    use bobbin_syntax::{AriadneRenderer, Renderer};
+                    let renderer = AriadneRenderer::without_colors();
+                    let rendered = renderer.render_all(&diagnostics, filename, &source);
+                    godot_error!("{}", rendered);
+                }
+
                 dict.set("errors", errors);
             }
             dict
@@ -591,6 +655,9 @@ impl IScriptExtension for BobbinScript {
     fn get_documentation(&self) -> Array<VarDictionary> {
         Array::new()
     }
+    fn get_doc_class_name(&self) -> StringName {
+        StringName::from("BobbinScript")
+    }
 
     // --- Methods ---
     fn has_method(&self, _method: StringName) -> bool {
@@ -837,7 +904,7 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
     }
 
     fn get_line_syntax_highlighting(&self, line: i32) -> VarDictionary {
-        use bobbin_syntax::{Scanner, TokenKind};
+        use bobbin_syntax::{Scanner, TokenKind, validate, LineIndex};
 
         let mut result = VarDictionary::new();
 
@@ -857,6 +924,34 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
         let comment_color = Color::from_rgb(0.50, 0.50, 0.50);  // Gray
         let variable_color = Color::from_rgb(0.60, 0.70, 0.90); // Blue
         let interp_color = Color::from_rgb(0.80, 0.60, 0.80);   // Purple
+        let error_color = Color::from_rgb(1.0, 0.3, 0.3);       // Red for errors
+
+        // Get full document text for validation
+        let line_count = text_edit.get_line_count();
+        let mut full_text = String::new();
+        for i in 0..line_count {
+            if i > 0 {
+                full_text.push('\n');
+            }
+            full_text.push_str(&text_edit.get_line(i).to_string());
+        }
+
+        // Validate and find errors on this line - use red TEXT color since
+        // underline_color is not supported by Godot's SyntaxHighlighter API
+        // (see https://github.com/godotengine/godot-proposals/discussions/7843)
+        let diagnostics = validate(&full_text);
+        let line_index = LineIndex::new(&full_text);
+        let mut error_ranges: Vec<(usize, usize)> = Vec::new();
+        for diag in &diagnostics {
+            if let Some(label) = diag.primary_label() {
+                let start_pos = line_index.line_col(label.span.start);
+                let end_pos = line_index.line_col(label.span.end);
+                // Check if error is on this line (0-indexed line from line_index)
+                if start_pos.line as i32 == line {
+                    error_ranges.push((start_pos.column as usize, end_pos.column as usize));
+                }
+            }
+        }
 
         // Handle comments
         if let Some(pos) = line_text.find("//") {
@@ -869,14 +964,23 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
         // Tokenize using bobbin-syntax Scanner
         let scanner = Scanner::new(&line_text);
         for token in scanner.tokens().flatten() {
-            let color = match token.kind {
-                TokenKind::Temp | TokenKind::Save | TokenKind::Set | TokenKind::Extern => keyword_color,
-                TokenKind::True | TokenKind::False => keyword_color,
-                TokenKind::String => string_color,
-                TokenKind::Number => number_color,
-                TokenKind::Identifier => variable_color,
-                TokenKind::OpenBrace | TokenKind::CloseBrace => interp_color,
-                _ => continue,
+            // Check if this token overlaps with any error range
+            let is_error = error_ranges.iter().any(|(start, end)| {
+                token.span.start < *end && token.span.end > *start
+            });
+
+            let color = if is_error {
+                error_color  // Override with red for errors
+            } else {
+                match token.kind {
+                    TokenKind::Temp | TokenKind::Save | TokenKind::Set | TokenKind::Extern => keyword_color,
+                    TokenKind::True | TokenKind::False => keyword_color,
+                    TokenKind::String => string_color,
+                    TokenKind::Number => number_color,
+                    TokenKind::Identifier => variable_color,
+                    TokenKind::OpenBrace | TokenKind::CloseBrace => interp_color,
+                    _ => continue,
+                }
             };
 
             let mut entry = VarDictionary::new();
@@ -889,7 +993,7 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
 }
 
 // =============================================================================
-// BobbinEditorPlugin - Registers the syntax highlighter with the editor
+// BobbinEditorPlugin - Registers the syntax highlighter
 // =============================================================================
 
 #[derive(GodotClass)]
@@ -904,6 +1008,7 @@ pub struct BobbinEditorPlugin {
 #[godot_api]
 impl IEditorPlugin for BobbinEditorPlugin {
     fn enter_tree(&mut self) {
+        // Register syntax highlighter
         let highlighter = Gd::from_init_fn(|base| BobbinSyntaxHighlighter { base });
 
         if let Some(mut script_editor) = EditorInterface::singleton().get_script_editor() {
@@ -914,6 +1019,7 @@ impl IEditorPlugin for BobbinEditorPlugin {
     }
 
     fn exit_tree(&mut self) {
+        // Unregister syntax highlighter
         if let Some(highlighter) = self.highlighter.take() {
             if let Some(mut script_editor) = EditorInterface::singleton().get_script_editor() {
                 script_editor.unregister_syntax_highlighter(&highlighter);
