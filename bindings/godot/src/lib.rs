@@ -409,15 +409,109 @@ impl IScriptLanguageExtension for BobbinLanguage {
     }
     fn complete_code(
         &self,
-        _code: GString,
+        code: GString,
         _path: GString,
         _owner: Option<Gd<Object>>,
     ) -> VarDictionary {
-        let mut dict = VarDictionary::new();
-        dict.set("result", 0i32); // CodeCompletionKind::NONE
-        dict.set("call_hint", GString::new());
-        dict.set("force", false);
-        dict
+        #[cfg(feature = "editor-tooling")]
+        {
+            use bobbin_syntax::analyze;
+            use std::collections::HashSet;
+
+            // Godot passes the source code up to (and including) the cursor position.
+            // We detect context by checking if the code ends inside an unclosed `{`.
+            let source = code.to_string();
+
+            // If the code ends with an incomplete interpolation (e.g., "Hello {" or "Hello {x"),
+            // strip it before analysis so we can still get declarations from valid code above.
+            // This allows variable completions to work inside interpolations.
+            let analysis_source = if let Some(last_open) = source.rfind('{') {
+                // Check if there's a closing brace after this opening brace
+                if source[last_open..].find('}').is_none() {
+                    // No closing brace - strip from the last `{` onward for analysis
+                    &source[..last_open]
+                } else {
+                    source.as_str()
+                }
+            } else {
+                source.as_str()
+            };
+            let analysis = analyze(analysis_source);
+
+            // Check if cursor is inside interpolation (code ends with unclosed {)
+            // NOTE: Simple brace counting doesn't handle escaped braces or nested contexts,
+            // but this is acceptable for Bobbin v1 which has no escape sequences.
+            let open_braces = source.matches('{').count();
+            let close_braces = source.matches('}').count();
+            let in_interpolation = open_braces > close_braces;
+
+            // Build completion options array
+            let mut options = Array::<VarDictionary>::new();
+
+            // Default font color (white - Godot requires this field)
+            let default_color = Color::from_rgb(1.0, 1.0, 1.0);
+
+            // Add variable completions (deduplicated by name)
+            let mut seen = HashSet::new();
+            for decl in &analysis.declarations {
+                if seen.insert(decl.name.clone()) {
+                    let mut item = VarDictionary::new();
+                    item.set("display", GString::from(decl.name.as_str()));
+                    item.set("insert_text", GString::from(decl.name.as_str()));
+                    item.set("kind", 12i32); // KIND_VARIABLE
+                    item.set("font_color", default_color);
+                    item.set("icon", Variant::nil());
+                    item.set("default_value", Variant::nil());
+                    item.set("location", 0i32);
+                    options.push(&item);
+                }
+            }
+
+            // Add keywords only outside interpolation
+            if !in_interpolation {
+                for kw in ["save", "temp", "set", "extern"] {
+                    let mut item = VarDictionary::new();
+                    item.set("display", GString::from(kw));
+                    item.set("insert_text", GString::from(format!("{} ", kw).as_str()));
+                    item.set("kind", 5i32); // KIND_KEYWORD
+                    item.set("font_color", default_color);
+                    item.set("icon", Variant::nil());
+                    item.set("default_value", Variant::nil());
+                    item.set("location", 0i32);
+                    options.push(&item);
+                }
+                // Boolean literals
+                for lit in ["true", "false"] {
+                    let mut item = VarDictionary::new();
+                    item.set("display", GString::from(lit));
+                    item.set("insert_text", GString::from(lit));
+                    item.set("kind", 10i32); // KIND_CONSTANT
+                    item.set("font_color", default_color);
+                    item.set("icon", Variant::nil());
+                    item.set("default_value", Variant::nil());
+                    item.set("location", 0i32);
+                    options.push(&item);
+                }
+            }
+
+            // Build return dictionary
+            let mut dict = VarDictionary::new();
+            dict.set("result", 1i32); // Non-zero = has results
+            dict.set("call_hint", GString::new());
+            dict.set("force", false);
+            dict.set("options", options);
+            dict
+        }
+
+        #[cfg(not(feature = "editor-tooling"))]
+        {
+            let _ = code;
+            let mut dict = VarDictionary::new();
+            dict.set("result", 0i32);
+            dict.set("call_hint", GString::new());
+            dict.set("force", false);
+            dict
+        }
     }
     fn lookup_code(
         &self,
