@@ -426,7 +426,7 @@ impl IScriptLanguageExtension for BobbinLanguage {
         _path: GString,
         _owner: Option<Gd<Object>>,
     ) -> VarDictionary {
-        // Godot 4.3 requires all six keys to be present
+        // Godot 4.5 requires all six keys to be present
         let mut dict = VarDictionary::new();
         dict.set("result", 7i32); // Error::ERR_UNAVAILABLE = 7 (no result found)
         dict.set("type", 0i32); // LOOKUP_RESULT_SCRIPT_LOCATION
