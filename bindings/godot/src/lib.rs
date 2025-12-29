@@ -961,6 +961,9 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
             return result;
         }
 
+        // Default text color (white/light gray for readability)
+        let default_color = Color::from_rgb(0.85, 0.85, 0.85);
+
         // Tokenize using bobbin-syntax Scanner
         let scanner = Scanner::new(&line_text);
         for token in scanner.tokens().flatten() {
@@ -986,6 +989,12 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
             let mut entry = VarDictionary::new();
             entry.set("color", color);
             result.set(token.span.start as i64, entry);
+
+            // Reset color after highlighted tokens to prevent colors from bleeding
+            // into subsequent unhighlighted text (Godot colors persist until overwritten)
+            let mut reset_entry = VarDictionary::new();
+            reset_entry.set("color", default_color);
+            result.set(token.span.end as i64, reset_entry);
         }
 
         result
