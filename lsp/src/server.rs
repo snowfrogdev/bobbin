@@ -7,7 +7,7 @@ use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-use bobbin_syntax::{validate, LineIndex};
+use bobbin_syntax::{validate, AriadneRenderer, LineIndex, Renderer};
 
 use crate::convert::to_lsp_diagnostics;
 
@@ -40,6 +40,16 @@ impl BobbinLanguageServer {
             vec![]
         } else {
             let line_index = LineIndex::new(source);
+
+            // Log beautiful ASCII-formatted errors to Output channel
+            let filename = uri
+                .path_segments()
+                .and_then(|s| s.last())
+                .unwrap_or("unknown.bobbin");
+            let renderer = AriadneRenderer::without_colors();
+            let rendered = renderer.render_all(&diagnostics, filename, source);
+            self.client.log_message(MessageType::ERROR, rendered).await;
+
             to_lsp_diagnostics(&diagnostics, &line_index, use_utf16)
         };
 

@@ -67,13 +67,24 @@ fn to_lsp_diagnostic(
         None
     };
 
+    // Build complete message including notes and suggestions
+    let mut message = diag.message.clone();
+    for note in &diag.notes {
+        message.push_str("\n\nNote: ");
+        message.push_str(note);
+    }
+    for suggestion in &diag.suggestions {
+        message.push_str("\n\nHelp: ");
+        message.push_str(&suggestion.message);
+    }
+
     lsp_types::Diagnostic {
         range,
         severity: Some(to_lsp_severity(diag.severity)),
         code: None,
         code_description: None,
         source: Some("bobbin".to_string()),
-        message: diag.message.clone(),
+        message,
         related_information,
         tags: None,
         data: None,
