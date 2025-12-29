@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Bobbin Smoke Test"
-config/features=PackedStringArray("4.3")
+config/features=PackedStringArray("4.5")
 
 [editor_plugins]
 
