@@ -1,13 +1,15 @@
 //! LSP server implementation using tower-lsp.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::RwLock;
 
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
-use bobbin_syntax::{validate, AriadneRenderer, LineIndex, Renderer};
+use bobbin_syntax::{
+    analyze, validate, AriadneRenderer, LineIndex, Renderer, VariableDeclaration, VariableKind,
+};
 
 use crate::convert::to_lsp_diagnostics;
 
@@ -90,6 +92,11 @@ impl LanguageServer for BobbinLanguageServer {
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::FULL,
                 )),
+                completion_provider: Some(CompletionOptions {
+                    trigger_characters: Some(vec!["{".to_string()]),
+                    resolve_provider: Some(false),
+                    ..Default::default()
+                }),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -150,4 +157,94 @@ impl LanguageServer for BobbinLanguageServer {
         // Clear diagnostics for closed document
         self.client.publish_diagnostics(uri, vec![], None).await;
     }
+
+    async fn completion(
+        &self,
+        params: CompletionParams,
+    ) -> Result<Option<CompletionResponse>> {
+        let uri = params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+
+        // Get document source, returning None if not found or lock is poisoned
+        let source = match self.documents.read().ok().and_then(|docs| docs.get(&uri).cloned()) {
+            Some(s) => s,
+            None => return Ok(None),
+        };
+
+        let use_utf16 = self.use_utf16.read().map(|g| *g).unwrap_or(true);
+        let line_index = LineIndex::new(&source);
+        let offset = line_index.offset(position.line, position.character, use_utf16);
+
+        let in_interpolation = is_inside_interpolation(&source, offset);
+        let analysis = analyze(&source);
+
+        let items = build_completion_items(&analysis.declarations, in_interpolation);
+        Ok(Some(CompletionResponse::List(CompletionList {
+            is_incomplete: false,
+            items,
+        })))
+    }
+}
+
+/// Check if cursor is inside an interpolation `{...}`.
+///
+/// NOTE: This uses simple brace counting which doesn't handle escaped braces
+/// or braces in string literals. This is acceptable for Bobbin's current syntax
+/// which has no escape sequences or nested string contexts.
+fn is_inside_interpolation(source: &str, offset: usize) -> bool {
+    let before = &source[..offset.min(source.len())];
+    let open_braces = before.matches('{').count();
+    let close_braces = before.matches('}').count();
+    open_braces > close_braces
+}
+
+/// Build completion items from declarations and context.
+fn build_completion_items(
+    decls: &[VariableDeclaration],
+    in_interpolation: bool,
+) -> Vec<CompletionItem> {
+    let mut items = Vec::new();
+    let mut seen = HashSet::new();
+
+    // Variables (deduplicated by name)
+    for decl in decls {
+        if seen.insert(decl.name.clone()) {
+            items.push(CompletionItem {
+                label: decl.name.clone(),
+                kind: Some(CompletionItemKind::VARIABLE),
+                detail: Some(match decl.kind {
+                    VariableKind::Temp => "(temp)".to_string(),
+                    VariableKind::Save => "(save)".to_string(),
+                    VariableKind::Extern => "(extern)".to_string(),
+                }),
+                sort_text: Some(format!("0_{}", decl.name)), // Variables first
+                ..Default::default()
+            });
+        }
+    }
+
+    // Keywords only outside interpolation
+    if !in_interpolation {
+        for kw in ["save", "temp", "set", "extern"] {
+            items.push(CompletionItem {
+                label: kw.to_string(),
+                kind: Some(CompletionItemKind::KEYWORD),
+                insert_text: Some(format!("{} ", kw)),
+                filter_text: Some(kw.to_string()), // Filter without trailing space
+                sort_text: Some(format!("1_{}", kw)), // Keywords after variables
+                ..Default::default()
+            });
+        }
+        // Boolean literals
+        for lit in ["true", "false"] {
+            items.push(CompletionItem {
+                label: lit.to_string(),
+                kind: Some(CompletionItemKind::CONSTANT),
+                sort_text: Some(format!("2_{}", lit)), // Literals last
+                ..Default::default()
+            });
+        }
+    }
+
+    items
 }

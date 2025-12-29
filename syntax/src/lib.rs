@@ -22,15 +22,75 @@ pub use diagnostic::{
     LabelStyle, LineIndex, Matcher, Renderer, Severity, SourcePosition, Suggestion,
 };
 pub use parser::{ParseError, Parser};
-pub use resolver::{Resolver, SemanticError, SymbolTable};
+pub use resolver::{Resolver, SemanticError, SymbolTable, VariableDeclaration, VariableKind};
 pub use scanner::{LexicalError, Scanner};
 pub use token::{Span, Token, TokenKind};
 
+/// Result of analyzing source code (for IDE tooling)
+#[derive(Debug)]
+pub struct AnalysisResult {
+    /// Diagnostics (parse errors and semantic errors)
+    pub diagnostics: Vec<Diagnostic>,
+    /// All variable declarations found (available even with errors)
+    pub declarations: Vec<VariableDeclaration>,
+}
+
+/// Analyze source code and return diagnostics and declarations.
+///
+/// This is the main entry point for IDE tooling. It runs the scanner,
+/// parser, and resolver to collect all errors and variable declarations
+/// without compiling or running the script.
+///
+/// Unlike `validate()`, this returns declarations even when there are
+/// semantic errors, enabling autocomplete to work with partially valid code.
+///
+/// # Example
+///
+/// ```
+/// use bobbin_syntax::analyze;
+///
+/// let source = "temp x = 1\nHello {x}!";
+/// let result = analyze(source);
+/// assert!(result.diagnostics.is_empty());
+/// assert_eq!(result.declarations.len(), 1);
+/// assert_eq!(result.declarations[0].name, "x");
+/// ```
+pub fn analyze(source: &str) -> AnalysisResult {
+    let tokens = Scanner::new(source).tokens();
+    match Parser::new(tokens).parse() {
+        Err(errors) => {
+            let matcher = JaroWinklerMatcher::default();
+            let ctx = DiagnosticContext::new(&[], &matcher);
+            AnalysisResult {
+                diagnostics: errors.into_iter().map(|e| e.into_diagnostic(&ctx)).collect(),
+                declarations: vec![], // No declarations on parse error (v1 simplification)
+            }
+        }
+        Ok(ast) => {
+            let (result, declarations, known_variables) = Resolver::new(&ast).analyze();
+            match result {
+                Err(errors) => {
+                    let matcher = JaroWinklerMatcher::default();
+                    let ctx = DiagnosticContext::new(&known_variables, &matcher);
+                    AnalysisResult {
+                        diagnostics: errors.into_iter().map(|e| e.into_diagnostic(&ctx)).collect(),
+                        declarations, // Return declarations even with semantic errors
+                    }
+                }
+                Ok(_) => AnalysisResult {
+                    diagnostics: vec![],
+                    declarations,
+                },
+            }
+        }
+    }
+}
+
 /// Validate source code and return diagnostics without executing.
 ///
-/// This is the main entry point for editor tooling. It runs the scanner,
-/// parser, and resolver to collect all errors without compiling or running
-/// the script.
+/// This is a convenience wrapper around `analyze()` that returns only
+/// diagnostics. Use `analyze()` if you also need variable declarations
+/// for IDE features like autocomplete.
 ///
 /// # Example
 ///
@@ -43,26 +103,5 @@ pub use token::{Span, Token, TokenKind};
 /// assert!(diagnostics[0].message.contains("undefined"));
 /// ```
 pub fn validate(source: &str) -> Vec<Diagnostic> {
-    let tokens = Scanner::new(source).tokens();
-    match Parser::new(tokens).parse() {
-        Err(errors) => {
-            let matcher = JaroWinklerMatcher::default();
-            let ctx = DiagnosticContext::new(&[], &matcher);
-            errors
-                .into_iter()
-                .map(|e| e.into_diagnostic(&ctx))
-                .collect()
-        }
-        Ok(ast) => match Resolver::new(&ast).analyze() {
-            Err((errors, known_variables)) => {
-                let matcher = JaroWinklerMatcher::default();
-                let ctx = DiagnosticContext::new(&known_variables, &matcher);
-                errors
-                    .into_iter()
-                    .map(|e| e.into_diagnostic(&ctx))
-                    .collect()
-            }
-            Ok(_) => vec![],
-        },
-    }
+    analyze(source).diagnostics
 }

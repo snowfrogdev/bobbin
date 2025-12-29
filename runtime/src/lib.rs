@@ -212,7 +212,8 @@ impl Runtime {
     ) -> Result<Self, BobbinError> {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
-        let symbols = Resolver::new(&ast).analyze()?;
+        let (result, _declarations, known_variables) = Resolver::new(&ast).analyze();
+        let symbols = result.map_err(|errors| (errors, known_variables))?;
         let chunk = Compiler::new(&ast, &symbols).compile()?;
 
         let mut runtime = Self {

@@ -148,6 +148,66 @@ impl LineIndex {
     pub fn line_count(&self) -> usize {
         self.line_starts.len()
     }
+
+    /// Convert a line/column position to a byte offset.
+    ///
+    /// If `use_utf16` is true, the column is interpreted as UTF-16 code units
+    /// and converted to byte offset. Otherwise, column is treated as bytes.
+    ///
+    /// Returns the byte offset, clamped to source bounds.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use bobbin_syntax::LineIndex;
+    ///
+    /// let source = "hello\nworld";
+    /// let index = LineIndex::new(source);
+    ///
+    /// // First character of "world" (line 1, column 0)
+    /// assert_eq!(index.offset(1, 0, false), 6);
+    ///
+    /// // Third character of "hello" (line 0, column 2)
+    /// assert_eq!(index.offset(0, 2, false), 2);
+    /// ```
+    pub fn offset(&self, line: u32, column: u32, use_utf16: bool) -> usize {
+        let line = line as usize;
+
+        // Clamp line to valid range
+        if line >= self.line_starts.len() {
+            return self.source.len();
+        }
+
+        let line_start = self.line_starts[line];
+
+        // Get the line end (start of next line or end of source)
+        let line_end = self
+            .line_starts
+            .get(line + 1)
+            .map(|&start| start.saturating_sub(1)) // exclude the \n
+            .unwrap_or(self.source.len());
+
+        let line_content = &self.source[line_start..line_end];
+
+        if use_utf16 {
+            // Convert UTF-16 column to byte offset
+            let mut utf16_col = 0u32;
+            let mut byte_offset = 0usize;
+
+            for c in line_content.chars() {
+                if utf16_col >= column {
+                    break;
+                }
+                utf16_col += if c.len_utf16() > 1 { 2 } else { 1 };
+                byte_offset += c.len_utf8();
+            }
+
+            (line_start + byte_offset).min(self.source.len())
+        } else {
+            // Column is already in bytes
+            (line_start + column as usize).min(self.source.len())
+        }
+    }
 }
 
 #[cfg(test)]
