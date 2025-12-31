@@ -1,0 +1,3 @@
+# LSP binaries are built by CI and not committed
+bobbin-lsp-*
+*.exe

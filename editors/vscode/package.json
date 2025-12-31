@@ -1,9 +1,33 @@
 {
   "name": "bobbin-vscode",
   "displayName": "Bobbin",
-  "description": "Bobbin narrative scripting language support",
+  "description": "Bobbin narrative scripting language support for branching dialogue and interactive stories",
   "version": "0.1.0",
-  "publisher": "bobbin",
+  "publisher": "snowfrog-studio",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/snowfrog/bobbin.git"
+  },
+  "homepage": "https://github.com/snowfrog/bobbin",
+  "bugs": {
+    "url": "https://github.com/snowfrog/bobbin/issues"
+  },
+  "keywords": [
+    "bobbin",
+    "dialogue",
+    "narrative",
+    "game",
+    "scripting",
+    "branching",
+    "interactive fiction",
+    "visual novel"
+  ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },

@@ -118,13 +118,18 @@ function getBundledServerPath(context: ExtensionContext): string | undefined {
   const platform = process.platform;
   const arch = process.arch;
 
+  // Use VS Code platform naming conventions (matches vsce target names)
   let binaryName: string;
-  if (platform === "win32") {
-    binaryName = "bobbin-lsp.exe";
-  } else if (platform === "darwin") {
-    binaryName = `bobbin-lsp-${arch === "arm64" ? "aarch64" : "x86_64"}-apple-darwin`;
-  } else if (platform === "linux") {
-    binaryName = `bobbin-lsp-${arch === "arm64" ? "aarch64" : "x86_64"}-unknown-linux-gnu`;
+  if (platform === "win32" && arch === "x64") {
+    binaryName = "bobbin-lsp-win32-x64.exe";
+  } else if (platform === "darwin" && arch === "x64") {
+    binaryName = "bobbin-lsp-darwin-x64";
+  } else if (platform === "darwin" && arch === "arm64") {
+    binaryName = "bobbin-lsp-darwin-arm64";
+  } else if (platform === "linux" && arch === "x64") {
+    binaryName = "bobbin-lsp-linux-x64";
+  } else if (platform === "linux" && arch === "arm64") {
+    binaryName = "bobbin-lsp-linux-arm64";
   } else {
     return undefined;
   }
