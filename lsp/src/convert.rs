@@ -100,3 +100,72 @@ fn to_lsp_severity(severity: Severity) -> lsp_types::DiagnosticSeverity {
         Severity::Help => lsp_types::DiagnosticSeverity::HINT,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn to_lsp_severity_mapping() {
+        assert_eq!(
+            to_lsp_severity(Severity::Error),
+            lsp_types::DiagnosticSeverity::ERROR
+        );
+        assert_eq!(
+            to_lsp_severity(Severity::Warning),
+            lsp_types::DiagnosticSeverity::WARNING
+        );
+        assert_eq!(
+            to_lsp_severity(Severity::Note),
+            lsp_types::DiagnosticSeverity::INFORMATION
+        );
+        assert_eq!(
+            to_lsp_severity(Severity::Help),
+            lsp_types::DiagnosticSeverity::HINT
+        );
+    }
+
+    #[test]
+    fn to_lsp_diagnostic_no_primary_label() {
+        let diag = Diagnostic {
+            message: "test error".to_string(),
+            severity: Severity::Error,
+            labels: vec![],
+            notes: vec![],
+            suggestions: vec![],
+        };
+        let line_index = LineIndex::new("");
+
+        let lsp_diag = to_lsp_diagnostic(&diag, &line_index, false);
+
+        // Should fall back to position 0,0
+        assert_eq!(lsp_diag.range.start.line, 0);
+        assert_eq!(lsp_diag.range.start.character, 0);
+        assert_eq!(lsp_diag.range.end.line, 0);
+        assert_eq!(lsp_diag.range.end.character, 0);
+    }
+
+    #[test]
+    fn to_lsp_diagnostic_includes_notes_and_suggestions() {
+        use bobbin_syntax::Span;
+
+        let diag = Diagnostic {
+            message: "main error".to_string(),
+            severity: Severity::Error,
+            labels: vec![],
+            notes: vec!["a note".to_string()],
+            suggestions: vec![bobbin_syntax::Suggestion {
+                message: "try this".to_string(),
+                span: Span { start: 0, end: 1 },
+                replacement: "fixed".to_string(),
+            }],
+        };
+        let line_index = LineIndex::new("");
+
+        let lsp_diag = to_lsp_diagnostic(&diag, &line_index, false);
+
+        assert!(lsp_diag.message.contains("main error"));
+        assert!(lsp_diag.message.contains("Note: a note"));
+        assert!(lsp_diag.message.contains("Help: try this"));
+    }
+}

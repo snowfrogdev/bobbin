@@ -1,16 +1,18 @@
-use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
+use bobbin_runtime::{
+    HostState, Runtime, Value, VariableStorage,
+    token::{BOOLEAN_LITERALS, KEYWORDS},
+};
 use godot::classes::{
     Engine, FileAccess, IResourceFormatLoader, IResourceFormatSaver, IScriptExtension,
     IScriptLanguageExtension, Os, Resource, ResourceFormatLoader, ResourceFormatSaver,
-    ResourceLoader, ResourceSaver, Script, ScriptExtension, ScriptLanguage,
-    ScriptLanguageExtension, SceneTree, Timer,
-    file_access::ModeFlags, resource_loader::CacheMode, script_language::ScriptNameCasing,
+    ResourceLoader, ResourceSaver, SceneTree, Script, ScriptExtension, ScriptLanguage,
+    ScriptLanguageExtension, Timer, file_access::ModeFlags, resource_loader::CacheMode,
+    script_language::ScriptNameCasing,
 };
 
 #[cfg(feature = "editor-tooling")]
 use godot::classes::{
-    EditorInterface, EditorPlugin, EditorSyntaxHighlighter,
-    IEditorPlugin, IEditorSyntaxHighlighter,
+    EditorInterface, EditorPlugin, EditorSyntaxHighlighter, IEditorPlugin, IEditorSyntaxHighlighter,
 };
 
 use godot::meta::RawPtr;
@@ -19,9 +21,20 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
 /// Tracks last reported errors to avoid duplicate output in the Output panel.
-/// Key: file path, Value: hash of error messages
 #[cfg(feature = "editor-tooling")]
-static LAST_REPORTED_ERRORS: Mutex<Option<(String, u64)>> = Mutex::new(None);
+struct LastErrorState {
+    file_path: String,
+    error_hash: u64,
+}
+
+/// Godot ScriptLanguage completion kind values.
+/// Maps to `ScriptLanguage::CodeCompletionKind` enum in Godot.
+/// See: https://docs.godotengine.org/en/stable/classes/class_scriptlanguage.html
+mod completion_kinds {
+    pub const KEYWORD: i32 = 5;
+    pub const CONSTANT: i32 = 10;
+    pub const VARIABLE: i32 = 12;
+}
 
 struct BobbinExtension;
 
@@ -174,9 +187,27 @@ unsafe impl ExtensionLibrary for BobbinExtension {
 // =============================================================================
 
 #[derive(GodotClass)]
-#[class(tool, init, base=ScriptLanguageExtension)]
+#[class(tool, base=ScriptLanguageExtension)]
 pub struct BobbinLanguage {
     base: Base<ScriptLanguageExtension>,
+    #[cfg(feature = "editor-tooling")]
+    last_reported_errors: Mutex<Option<LastErrorState>>,
+}
+
+#[godot_api]
+impl BobbinLanguage {
+    #[cfg(feature = "editor-tooling")]
+    fn init(base: Base<ScriptLanguageExtension>) -> Self {
+        Self {
+            base,
+            last_reported_errors: Mutex::new(None),
+        }
+    }
+
+    #[cfg(not(feature = "editor-tooling"))]
+    fn init(base: Base<ScriptLanguageExtension>) -> Self {
+        Self { base }
+    }
 }
 
 #[godot_api]
@@ -241,12 +272,9 @@ impl IScriptLanguageExtension for BobbinLanguage {
     // --- Language features ---
     fn get_reserved_words(&self) -> PackedStringArray {
         let mut arr = PackedStringArray::new();
-        arr.push(&GString::from("temp"));
-        arr.push(&GString::from("save"));
-        arr.push(&GString::from("set"));
-        arr.push(&GString::from("extern"));
-        arr.push(&GString::from("true"));
-        arr.push(&GString::from("false"));
+        for keyword in KEYWORDS.iter().chain(BOOLEAN_LITERALS.iter()) {
+            arr.push(&GString::from(*keyword));
+        }
         arr
     }
     fn is_control_flow_keyword(&self, _keyword: GString) -> bool {
@@ -290,7 +318,7 @@ impl IScriptLanguageExtension for BobbinLanguage {
     ) -> VarDictionary {
         #[cfg(feature = "editor-tooling")]
         {
-            use bobbin_syntax::{validate, LineIndex};
+            use bobbin_syntax::{LineIndex, validate};
 
             let source = script.to_string();
             let diagnostics = validate(&source);
@@ -306,8 +334,11 @@ impl IScriptLanguageExtension for BobbinLanguage {
                 dict.set("errors", Array::<VarDictionary>::new());
 
                 // Clear last reported errors for this file
-                if let Ok(mut last) = LAST_REPORTED_ERRORS.lock() {
-                    if last.as_ref().is_some_and(|(p, _)| p == &path.to_string()) {
+                if let Ok(mut last) = self.last_reported_errors.lock() {
+                    if last
+                        .as_ref()
+                        .is_some_and(|state| state.file_path == path.to_string())
+                    {
                         *last = None;
                     }
                 }
@@ -361,10 +392,15 @@ impl IScriptLanguageExtension for BobbinLanguage {
                 error_messages.hash(&mut hasher);
                 let error_hash = hasher.finish();
 
-                let should_output = if let Ok(mut last) = LAST_REPORTED_ERRORS.lock() {
-                    let changed = last.as_ref().is_none_or(|(p, h)| p != &path_str || *h != error_hash);
+                let should_output = if let Ok(mut last) = self.last_reported_errors.lock() {
+                    let changed = last.as_ref().is_none_or(|state| {
+                        state.file_path != path_str || state.error_hash != error_hash
+                    });
                     if changed {
-                        *last = Some((path_str.clone(), error_hash));
+                        *last = Some(LastErrorState {
+                            file_path: path_str.clone(),
+                            error_hash,
+                        });
                     }
                     changed
                 } else {
@@ -458,7 +494,7 @@ impl IScriptLanguageExtension for BobbinLanguage {
                     let mut item = VarDictionary::new();
                     item.set("display", GString::from(decl.name.as_str()));
                     item.set("insert_text", GString::from(decl.name.as_str()));
-                    item.set("kind", 12i32); // KIND_VARIABLE
+                    item.set("kind", completion_kinds::VARIABLE);
                     item.set("font_color", default_color);
                     item.set("icon", Variant::nil());
                     item.set("default_value", Variant::nil());
@@ -469,11 +505,14 @@ impl IScriptLanguageExtension for BobbinLanguage {
 
             // Add keywords only outside interpolation
             if !in_interpolation {
-                for kw in ["save", "temp", "set", "extern"] {
+                for keyword in KEYWORDS {
                     let mut item = VarDictionary::new();
-                    item.set("display", GString::from(kw));
-                    item.set("insert_text", GString::from(format!("{} ", kw).as_str()));
-                    item.set("kind", 5i32); // KIND_KEYWORD
+                    item.set("display", GString::from(*keyword));
+                    item.set(
+                        "insert_text",
+                        GString::from(format!("{} ", keyword).as_str()),
+                    );
+                    item.set("kind", completion_kinds::KEYWORD);
                     item.set("font_color", default_color);
                     item.set("icon", Variant::nil());
                     item.set("default_value", Variant::nil());
@@ -481,11 +520,11 @@ impl IScriptLanguageExtension for BobbinLanguage {
                     options.push(&item);
                 }
                 // Boolean literals
-                for lit in ["true", "false"] {
+                for literal in BOOLEAN_LITERALS {
                     let mut item = VarDictionary::new();
-                    item.set("display", GString::from(lit));
-                    item.set("insert_text", GString::from(lit));
-                    item.set("kind", 10i32); // KIND_CONSTANT
+                    item.set("display", GString::from(*literal));
+                    item.set("insert_text", GString::from(*literal));
+                    item.set("kind", completion_kinds::CONSTANT);
                     item.set("font_color", default_color);
                     item.set("icon", Variant::nil());
                     item.set("default_value", Variant::nil());
@@ -973,6 +1012,53 @@ impl IResourceFormatSaver for BobbinSaver {
 // BobbinSyntaxHighlighter - Custom syntax highlighting for .bobbin files
 // =============================================================================
 
+/// Syntax highlighting colors matching VS Code extension theme.
+#[cfg(feature = "editor-tooling")]
+mod syntax_colors {
+    use bobbin_syntax::TokenKind;
+    use godot::prelude::Color;
+
+    pub fn keyword() -> Color {
+        Color::from_rgb(0.86, 0.44, 0.58)
+    } // Pink
+    pub fn string() -> Color {
+        Color::from_rgb(0.60, 0.80, 0.60)
+    } // Green
+    pub fn number() -> Color {
+        Color::from_rgb(0.69, 0.80, 0.90)
+    } // Light blue
+    pub fn comment() -> Color {
+        Color::from_rgb(0.50, 0.50, 0.50)
+    } // Gray
+    pub fn variable() -> Color {
+        Color::from_rgb(0.60, 0.70, 0.90)
+    } // Blue
+    pub fn interpolation() -> Color {
+        Color::from_rgb(0.80, 0.60, 0.80)
+    } // Purple
+    pub fn error() -> Color {
+        Color::from_rgb(1.0, 0.3, 0.3)
+    } // Red
+    pub fn default() -> Color {
+        Color::from_rgb(0.85, 0.85, 0.85)
+    } // Light gray
+
+    /// Returns the color for a token kind, or None if the token should not be highlighted.
+    pub fn for_token(kind: TokenKind) -> Option<Color> {
+        match kind {
+            TokenKind::Temp | TokenKind::Save | TokenKind::Set | TokenKind::Extern => {
+                Some(keyword())
+            }
+            TokenKind::True | TokenKind::False => Some(keyword()),
+            TokenKind::String => Some(string()),
+            TokenKind::Number => Some(number()),
+            TokenKind::Identifier => Some(variable()),
+            TokenKind::OpenBrace | TokenKind::CloseBrace => Some(interpolation()),
+            _ => None,
+        }
+    }
+}
+
 #[derive(GodotClass)]
 #[class(tool, init, base=EditorSyntaxHighlighter)]
 #[cfg(feature = "editor-tooling")]
@@ -986,7 +1072,7 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
     fn create(&self) -> Option<Gd<EditorSyntaxHighlighter>> {
         Some(self.to_gd().upcast())
     }
-    
+
     fn get_name(&self) -> GString {
         GString::from("Bobbin")
     }
@@ -998,7 +1084,7 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
     }
 
     fn get_line_syntax_highlighting(&self, line: i32) -> VarDictionary {
-        use bobbin_syntax::{Scanner, TokenKind, validate, LineIndex};
+        use bobbin_syntax::{LineIndex, Scanner, validate};
 
         let mut result = VarDictionary::new();
 
@@ -1011,16 +1097,48 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
             return result;
         }
 
-        // Colors matching VS Code extension
-        let keyword_color = Color::from_rgb(0.86, 0.44, 0.58);  // Pink
-        let string_color = Color::from_rgb(0.60, 0.80, 0.60);   // Green
-        let number_color = Color::from_rgb(0.69, 0.80, 0.90);   // Light blue
-        let comment_color = Color::from_rgb(0.50, 0.50, 0.50);  // Gray
-        let variable_color = Color::from_rgb(0.60, 0.70, 0.90); // Blue
-        let interp_color = Color::from_rgb(0.80, 0.60, 0.80);   // Purple
-        let error_color = Color::from_rgb(1.0, 0.3, 0.3);       // Red for errors
+        // Handle comments first (early return)
+        if let Some(pos) = line_text.find("//") {
+            let mut entry = VarDictionary::new();
+            entry.set("color", syntax_colors::comment());
+            result.set(pos as i64, entry);
+            return result;
+        }
 
-        // Get full document text for validation
+        // Get full document text and find errors on this line
+        let full_text = self.get_full_document_text(&text_edit);
+        let error_ranges = self.find_errors_on_line(&full_text, line);
+
+        // Tokenize and highlight
+        for token in Scanner::new(&line_text).tokens().flatten() {
+            let is_error = error_ranges
+                .iter()
+                .any(|(start, end)| token.span.start < *end && token.span.end > *start);
+
+            let color = if is_error {
+                syntax_colors::error()
+            } else {
+                match syntax_colors::for_token(token.kind) {
+                    Some(c) => c,
+                    None => continue,
+                }
+            };
+
+            let mut entry = VarDictionary::new();
+            entry.set("color", color);
+            result.set(token.span.start as i64, entry);
+
+            // Reset color after token to prevent bleeding
+            let mut reset_entry = VarDictionary::new();
+            reset_entry.set("color", syntax_colors::default());
+            result.set(token.span.end as i64, reset_entry);
+        }
+
+        result
+    }
+
+    /// Get the full document text from a TextEdit.
+    fn get_full_document_text(&self, text_edit: &godot::classes::TextEdit) -> String {
         let line_count = text_edit.get_line_count();
         let mut full_text = String::new();
         for i in 0..line_count {
@@ -1029,69 +1147,28 @@ impl IEditorSyntaxHighlighter for BobbinSyntaxHighlighter {
             }
             full_text.push_str(&text_edit.get_line(i).to_string());
         }
+        full_text
+    }
 
-        // Validate and find errors on this line - use red TEXT color since
-        // underline_color is not supported by Godot's SyntaxHighlighter API
-        // (see https://github.com/godotengine/godot-proposals/discussions/7843)
-        let diagnostics = validate(&full_text);
-        let line_index = LineIndex::new(&full_text);
-        let mut error_ranges: Vec<(usize, usize)> = Vec::new();
+    /// Find error ranges (column start, column end) on a specific line.
+    fn find_errors_on_line(&self, full_text: &str, line: i32) -> Vec<(usize, usize)> {
+        use bobbin_syntax::{LineIndex, validate};
+
+        let diagnostics = validate(full_text);
+        let line_index = LineIndex::new(full_text);
+        let mut error_ranges = Vec::new();
+
         for diag in &diagnostics {
             if let Some(label) = diag.primary_label() {
                 let start_pos = line_index.line_col(label.span.start);
                 let end_pos = line_index.line_col(label.span.end);
-                // Check if error is on this line (0-indexed line from line_index)
                 if start_pos.line as i32 == line {
                     error_ranges.push((start_pos.column as usize, end_pos.column as usize));
                 }
             }
         }
 
-        // Handle comments
-        if let Some(pos) = line_text.find("//") {
-            let mut entry = VarDictionary::new();
-            entry.set("color", comment_color);
-            result.set(pos as i64, entry);
-            return result;
-        }
-
-        // Default text color (white/light gray for readability)
-        let default_color = Color::from_rgb(0.85, 0.85, 0.85);
-
-        // Tokenize using bobbin-syntax Scanner
-        let scanner = Scanner::new(&line_text);
-        for token in scanner.tokens().flatten() {
-            // Check if this token overlaps with any error range
-            let is_error = error_ranges.iter().any(|(start, end)| {
-                token.span.start < *end && token.span.end > *start
-            });
-
-            let color = if is_error {
-                error_color  // Override with red for errors
-            } else {
-                match token.kind {
-                    TokenKind::Temp | TokenKind::Save | TokenKind::Set | TokenKind::Extern => keyword_color,
-                    TokenKind::True | TokenKind::False => keyword_color,
-                    TokenKind::String => string_color,
-                    TokenKind::Number => number_color,
-                    TokenKind::Identifier => variable_color,
-                    TokenKind::OpenBrace | TokenKind::CloseBrace => interp_color,
-                    _ => continue,
-                }
-            };
-
-            let mut entry = VarDictionary::new();
-            entry.set("color", color);
-            result.set(token.span.start as i64, entry);
-
-            // Reset color after highlighted tokens to prevent colors from bleeding
-            // into subsequent unhighlighted text (Godot colors persist until overwritten)
-            let mut reset_entry = VarDictionary::new();
-            reset_entry.set("color", default_color);
-            result.set(token.span.end as i64, reset_entry);
-        }
-
-        result
+        error_ranges
     }
 }
 
@@ -1135,6 +1212,13 @@ impl IEditorPlugin for BobbinEditorPlugin {
 // BobbinRuntime - Main API for running Bobbin scripts
 // =============================================================================
 
+/// Hot reload state for file-based runtimes (debug builds only).
+struct HotReloadState {
+    source_path: GString,
+    last_modified: u64,
+    poll_timer: Option<Gd<Timer>>,
+}
+
 #[derive(GodotClass)]
 #[class(base=RefCounted, no_init)]
 pub struct BobbinRuntime {
@@ -1142,11 +1226,8 @@ pub struct BobbinRuntime {
     storage: Arc<MemoryStorage>,
     host: Arc<VarDictionaryHostState>,
     inner: Runtime,
-
-    // Hot reload support (debug builds only)
-    source_path: Option<GString>,  // None if created via from_string()
-    last_modified: u64,            // File modification timestamp
-    poll_timer: Option<Gd<Timer>>, // Self-managed polling timer
+    /// Hot reload state (None for string-based or release builds).
+    hot_reload: Option<HotReloadState>,
 }
 
 #[godot_api]
@@ -1173,9 +1254,7 @@ impl BobbinRuntime {
                 storage,
                 host,
                 inner: runtime,
-                source_path: None,
-                last_modified: 0,
-                poll_timer: None,
+                hot_reload: None,
             })),
             Err(e) => {
                 godot_error!(
@@ -1220,12 +1299,15 @@ impl BobbinRuntime {
 
         match Runtime::new(&source, storage_dyn, host_dyn) {
             Ok(runtime) => {
-                // Get initial modification time and setup hot reload (debug builds only)
-                let (source_path, last_modified) = if Os::singleton().is_debug_build() {
-                    let modified = FileAccess::get_modified_time(&path);
-                    (Some(path), modified)
+                // Setup hot reload state (debug builds only)
+                let hot_reload = if Os::singleton().is_debug_build() {
+                    Some(HotReloadState {
+                        source_path: path,
+                        last_modified: FileAccess::get_modified_time(&path),
+                        poll_timer: None,
+                    })
                 } else {
-                    (None, 0)
+                    None
                 };
 
                 let mut instance = Gd::from_init_fn(|base| Self {
@@ -1233,9 +1315,7 @@ impl BobbinRuntime {
                     storage,
                     host,
                     inner: runtime,
-                    source_path,
-                    last_modified,
-                    poll_timer: None,
+                    hot_reload,
                 });
 
                 // Start hot reload polling (debug only, requires scene tree)
@@ -1268,9 +1348,9 @@ impl BobbinRuntime {
     fn reload(&mut self, new_source: GString) -> bool {
         let source_str = new_source.to_string();
         let path_str = self
-            .source_path
+            .hot_reload
             .as_ref()
-            .map(|p| p.to_string())
+            .map(|hr| hr.source_path.to_string())
             .unwrap_or_else(|| "<script>".to_string());
 
         let storage_dyn: Arc<dyn VariableStorage> = self.storage.clone();
@@ -1299,28 +1379,24 @@ impl BobbinRuntime {
     /// Called automatically by the internal Timer. Can also be called manually.
     #[func]
     fn check_for_reload(&mut self) {
-        // Skip in release builds
-        if !Os::singleton().is_debug_build() {
-            return;
-        }
-
-        // Skip if no source path (created via from_string)
-        let Some(path) = &self.source_path else {
+        // Skip if no hot reload state (string-based or release build)
+        let Some(hot_reload) = &mut self.hot_reload else {
             return;
         };
 
         // Check modification time
-        let current_modified = FileAccess::get_modified_time(path);
-        if current_modified == self.last_modified {
+        let current_modified = FileAccess::get_modified_time(&hot_reload.source_path);
+        if current_modified == hot_reload.last_modified {
             return; // No change
         }
 
-        // File changed - reload
-        self.last_modified = current_modified;
+        // File changed - update timestamp and reload
+        hot_reload.last_modified = current_modified;
+        let path = hot_reload.source_path.clone();
 
         // Load fresh BobbinScript via ResourceLoader (bypasses cache)
         let Some(resource) = ResourceLoader::singleton()
-            .load_ex(path)
+            .load_ex(&path)
             .type_hint("BobbinScript")
             .cache_mode(CacheMode::REPLACE)
             .done()
@@ -1344,13 +1420,11 @@ impl BobbinRuntime {
     /// Called automatically by from_file(). No-op if already started or in release.
     #[func]
     fn start_hot_reload(&mut self) {
-        // Skip in release builds or if no source path
-        if !Os::singleton().is_debug_build() || self.source_path.is_none() {
+        // Skip if no hot reload state or timer already exists
+        let Some(hot_reload) = &mut self.hot_reload else {
             return;
-        }
-
-        // Skip if timer already exists
-        if self.poll_timer.is_some() {
+        };
+        if hot_reload.poll_timer.is_some() {
             return;
         }
 
@@ -1372,7 +1446,7 @@ impl BobbinRuntime {
         {
             if let Some(mut root) = tree.get_root() {
                 root.call_deferred("add_child", &[timer.to_variant()]);
-                self.poll_timer = Some(timer);
+                hot_reload.poll_timer = Some(timer);
             } else {
                 godot_warn!("Hot reload: Could not access scene root, polling disabled");
                 timer.free();
@@ -1386,10 +1460,12 @@ impl BobbinRuntime {
     /// Stop hot reload polling and clean up timer.
     #[func]
     fn stop_hot_reload(&mut self) {
-        if let Some(mut timer) = self.poll_timer.take() {
-            timer.stop();
-            if timer.is_inside_tree() {
-                timer.queue_free();
+        if let Some(hot_reload) = &mut self.hot_reload {
+            if let Some(mut timer) = hot_reload.poll_timer.take() {
+                timer.stop();
+                if timer.is_inside_tree() {
+                    timer.queue_free();
+                }
             }
         }
     }

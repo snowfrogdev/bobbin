@@ -114,27 +114,19 @@ async function findServerPath(
   return "bobbin-lsp";
 }
 
+// Platform-specific binary names (matches vsce target names)
+const PLATFORM_BINARIES: Record<string, string | undefined> = {
+  "win32-x64": "bobbin-lsp-win32-x64.exe",
+  "darwin-x64": "bobbin-lsp-darwin-x64",
+  "darwin-arm64": "bobbin-lsp-darwin-arm64",
+  "linux-x64": "bobbin-lsp-linux-x64",
+  "linux-arm64": "bobbin-lsp-linux-arm64",
+};
+
 function getBundledServerPath(context: ExtensionContext): string | undefined {
-  const platform = process.platform;
-  const arch = process.arch;
-
-  // Use VS Code platform naming conventions (matches vsce target names)
-  let binaryName: string;
-  if (platform === "win32" && arch === "x64") {
-    binaryName = "bobbin-lsp-win32-x64.exe";
-  } else if (platform === "darwin" && arch === "x64") {
-    binaryName = "bobbin-lsp-darwin-x64";
-  } else if (platform === "darwin" && arch === "arm64") {
-    binaryName = "bobbin-lsp-darwin-arm64";
-  } else if (platform === "linux" && arch === "x64") {
-    binaryName = "bobbin-lsp-linux-x64";
-  } else if (platform === "linux" && arch === "arm64") {
-    binaryName = "bobbin-lsp-linux-arm64";
-  } else {
-    return undefined;
-  }
-
-  return path.join(context.extensionPath, "bin", binaryName);
+  const key = `${process.platform}-${process.arch}`;
+  const binaryName = PLATFORM_BINARIES[key];
+  return binaryName ? path.join(context.extensionPath, "bin", binaryName) : undefined;
 }
 
 function getExecutableName(name: string): string {

@@ -24,7 +24,7 @@ pub use diagnostic::{
 pub use parser::{ParseError, Parser};
 pub use resolver::{Resolver, SemanticError, SymbolTable, VariableDeclaration, VariableKind};
 pub use scanner::{LexicalError, Scanner};
-pub use token::{Span, Token, TokenKind};
+pub use token::{BOOLEAN_LITERALS, KEYWORDS, Span, Token, TokenKind};
 
 /// Result of analyzing source code (for IDE tooling)
 #[derive(Debug)]
@@ -57,32 +57,48 @@ pub struct AnalysisResult {
 /// ```
 pub fn analyze(source: &str) -> AnalysisResult {
     let tokens = Scanner::new(source).tokens();
-    match Parser::new(tokens).parse() {
-        Err(errors) => {
-            let matcher = JaroWinklerMatcher::default();
-            let ctx = DiagnosticContext::new(&[], &matcher);
-            AnalysisResult {
-                diagnostics: errors.into_iter().map(|e| e.into_diagnostic(&ctx)).collect(),
-                declarations: vec![], // No declarations on parse error (v1 simplification)
-            }
-        }
-        Ok(ast) => {
-            let (result, declarations, known_variables) = Resolver::new(&ast).analyze();
-            match result {
-                Err(errors) => {
-                    let matcher = JaroWinklerMatcher::default();
-                    let ctx = DiagnosticContext::new(&known_variables, &matcher);
-                    AnalysisResult {
-                        diagnostics: errors.into_iter().map(|e| e.into_diagnostic(&ctx)).collect(),
-                        declarations, // Return declarations even with semantic errors
-                    }
-                }
-                Ok(_) => AnalysisResult {
-                    diagnostics: vec![],
-                    declarations,
-                },
-            }
-        }
+
+    let ast = match Parser::new(tokens).parse() {
+        Ok(ast) => ast,
+        Err(errors) => return make_parse_error_result(errors),
+    };
+
+    let (result, declarations, known_variables) = Resolver::new(&ast).analyze();
+
+    match result {
+        Ok(_) => AnalysisResult {
+            diagnostics: vec![],
+            declarations,
+        },
+        Err(errors) => make_semantic_error_result(errors, declarations, &known_variables),
+    }
+}
+
+fn make_parse_error_result(errors: Vec<ParseError>) -> AnalysisResult {
+    let matcher = JaroWinklerMatcher::default();
+    let context = DiagnosticContext::new(&[], &matcher);
+    AnalysisResult {
+        diagnostics: errors
+            .into_iter()
+            .map(|e| e.into_diagnostic(&context))
+            .collect(),
+        declarations: vec![],
+    }
+}
+
+fn make_semantic_error_result(
+    errors: Vec<SemanticError>,
+    declarations: Vec<VariableDeclaration>,
+    known_variables: &[String],
+) -> AnalysisResult {
+    let matcher = JaroWinklerMatcher::default();
+    let context = DiagnosticContext::new(known_variables, &matcher);
+    AnalysisResult {
+        diagnostics: errors
+            .into_iter()
+            .map(|e| e.into_diagnostic(&context))
+            .collect(),
+        declarations,
     }
 }
 
@@ -104,4 +120,42 @@ pub fn analyze(source: &str) -> AnalysisResult {
 /// ```
 pub fn validate(source: &str) -> Vec<Diagnostic> {
     analyze(source).diagnostics
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn analyze_valid_script() {
+        let result = analyze("temp x = 1\nHello {x}!");
+        assert!(result.diagnostics.is_empty());
+        assert_eq!(result.declarations.len(), 1);
+        assert_eq!(result.declarations[0].name, "x");
+    }
+
+    #[test]
+    fn analyze_undefined_variable() {
+        let result = analyze("Hello {unknown}!");
+        assert_eq!(result.diagnostics.len(), 1);
+        assert!(result.diagnostics[0].message.contains("undefined"));
+    }
+
+    #[test]
+    fn analyze_returns_declarations_with_semantic_errors() {
+        // Define a variable but also use an undefined one
+        let result = analyze("temp x = 1\nHello {x} and {undefined}!");
+        assert!(!result.diagnostics.is_empty());
+        // Should still return the valid declaration
+        assert_eq!(result.declarations.len(), 1);
+        assert_eq!(result.declarations[0].name, "x");
+    }
+
+    #[test]
+    fn analyze_parse_error_returns_no_declarations() {
+        // Invalid syntax - unmatched brace
+        let result = analyze("Hello {");
+        assert!(!result.diagnostics.is_empty());
+        assert!(result.declarations.is_empty());
+    }
 }

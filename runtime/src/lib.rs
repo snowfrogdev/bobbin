@@ -6,10 +6,10 @@ use crate::vm::{StepResult, VM};
 
 // Re-export syntax crate types for backward compatibility
 pub use bobbin_syntax::{
-    validate, AriadneRenderer, Diagnostic, DiagnosticContext, IntoDiagnostic,
-    JaroWinklerMatcher, Label, LabelStyle, LexicalError, LineIndex, Matcher, ParseError, Parser,
-    Renderer, Resolver, Scanner, SemanticError, Severity, SourcePosition, Span, Suggestion,
-    SymbolTable, Token, TokenKind,
+    AriadneRenderer, Diagnostic, DiagnosticContext, IntoDiagnostic, JaroWinklerMatcher, Label,
+    LabelStyle, LexicalError, LineIndex, Matcher, ParseError, Parser, Renderer, Resolver, Scanner,
+    SemanticError, Severity, SourcePosition, Span, Suggestion, SymbolTable, Token, TokenKind,
+    validate,
 };
 // Re-export local types
 pub use crate::chunk::Value;
@@ -24,7 +24,7 @@ pub mod diagnostic {
     };
 }
 pub mod token {
-    pub use bobbin_syntax::{Span, Token, TokenKind};
+    pub use bobbin_syntax::{BOOLEAN_LITERALS, KEYWORDS, Span, Token, TokenKind};
 }
 
 mod chunk;
