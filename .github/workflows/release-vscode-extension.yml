@@ -1,0 +1,157 @@
+name: Release VS Code Extension
+
+on:
+  push:
+    tags: ['vscode-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 0.1.0)'
+        required: true
+      dry_run:
+        description: 'Dry run (package only, no publish)'
+        type: boolean
+        default: false
+
+jobs:
+  # Build LSP binaries for all platforms
+  build-lsp:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: bobbin-lsp-linux-x64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact: bobbin-lsp-linux-arm64
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: bobbin-lsp-win32-x64.exe
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact: bobbin-lsp-darwin-x64
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: bobbin-lsp-darwin-arm64
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup toolchain install stable
+          rustup target add ${{ matrix.target }}
+
+      - name: Install cross (Linux ARM64)
+        if: matrix.cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build LSP (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --manifest-path lsp/Cargo.toml --release --target ${{ matrix.target }}
+
+      - name: Build LSP (cross)
+        if: matrix.cross
+        run: cross build --manifest-path lsp/Cargo.toml --release --target ${{ matrix.target }}
+
+      - name: Rename binary (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp lsp/target/${{ matrix.target }}/release/bobbin-lsp ${{ matrix.artifact }}
+
+      - name: Rename binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "lsp/target/${{ matrix.target }}/release/bobbin-lsp.exe" "${{ matrix.artifact }}"
+
+      - name: Upload LSP binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}
+
+  # Package and publish the extension
+  package-and-publish:
+    needs: build-lsp
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: editors/vscode
+        run: npm ci
+
+      - name: Compile TypeScript
+        working-directory: editors/vscode
+        run: npm run compile
+
+      - name: Create bin directory
+        run: mkdir -p editors/vscode/bin
+
+      - name: Download all LSP binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: editors/vscode/bin
+          merge-multiple: true
+
+      - name: Make binaries executable
+        run: chmod +x editors/vscode/bin/bobbin-lsp-* || true
+
+      - name: List bin contents
+        run: ls -la editors/vscode/bin/
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF#refs/tags/vscode-v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update package.json version
+        working-directory: editors/vscode
+        run: npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Package extension
+        working-directory: editors/vscode
+        run: vsce package --out bobbin-${{ steps.version.outputs.version }}.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bobbin-vsix
+          path: editors/vscode/bobbin-${{ steps.version.outputs.version }}.vsix
+
+      # Publish to VS Code Marketplace
+      - name: Publish to VS Code Marketplace
+        if: ${{ !inputs.dry_run }}
+        uses: HaaLeo/publish-vscode-extension@v2
+        with:
+          pat: ${{ secrets.VSCE_PAT }}
+          registryUrl: https://marketplace.visualstudio.com
+          extensionFile: editors/vscode/bobbin-${{ steps.version.outputs.version }}.vsix
+
+      # Create GitHub Release
+      - name: Create GitHub Release
+        if: ${{ !inputs.dry_run }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: vscode-v${{ steps.version.outputs.version }}
+          name: Bobbin VS Code Extension v${{ steps.version.outputs.version }}
+          files: editors/vscode/bobbin-${{ steps.version.outputs.version }}.vsix
+          generate_release_notes: true

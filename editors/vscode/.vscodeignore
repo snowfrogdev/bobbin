@@ -1,0 +1,19 @@
+# Development files
+.vscode/**
+src/**
+*.ts
+!*.d.ts
+tsconfig.json
+.gitignore
+.eslintrc.json
+
+# Build artifacts
+node_modules/**
+**/*.map
+
+# Documentation (README is included by default)
+CONTRIBUTING.md
+
+# Test files
+test/**
+**/*.test.ts
