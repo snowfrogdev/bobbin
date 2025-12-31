@@ -8,7 +8,8 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use bobbin_syntax::{
-    analyze, validate, AriadneRenderer, LineIndex, Renderer, VariableDeclaration, VariableKind,
+    AriadneRenderer, BOOLEAN_LITERALS, KEYWORDS, LineIndex, Renderer, VariableDeclaration,
+    VariableKind, analyze, validate,
 };
 
 use crate::convert::to_lsp_diagnostics;
@@ -72,9 +73,7 @@ impl LanguageServer for BobbinLanguageServer {
             .and_then(|g| g.position_encodings.as_ref())
             .map(|encodings| {
                 // Prefer UTF-8 if client supports it
-                !encodings
-                    .iter()
-                    .any(|e| *e == PositionEncodingKind::UTF8)
+                !encodings.iter().any(|e| *e == PositionEncodingKind::UTF8)
             })
             .unwrap_or(true); // Default to UTF-16 if not specified
 
@@ -158,15 +157,17 @@ impl LanguageServer for BobbinLanguageServer {
         self.client.publish_diagnostics(uri, vec![], None).await;
     }
 
-    async fn completion(
-        &self,
-        params: CompletionParams,
-    ) -> Result<Option<CompletionResponse>> {
+    async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         let uri = params.text_document_position.text_document.uri;
         let position = params.text_document_position.position;
 
         // Get document source, returning None if not found or lock is poisoned
-        let source = match self.documents.read().ok().and_then(|docs| docs.get(&uri).cloned()) {
+        let source = match self
+            .documents
+            .read()
+            .ok()
+            .and_then(|docs| docs.get(&uri).cloned())
+        {
             Some(s) => s,
             None => return Ok(None),
         };
@@ -225,26 +226,94 @@ fn build_completion_items(
 
     // Keywords only outside interpolation
     if !in_interpolation {
-        for kw in ["save", "temp", "set", "extern"] {
+        for keyword in KEYWORDS {
             items.push(CompletionItem {
-                label: kw.to_string(),
+                label: (*keyword).to_string(),
                 kind: Some(CompletionItemKind::KEYWORD),
-                insert_text: Some(format!("{} ", kw)),
-                filter_text: Some(kw.to_string()), // Filter without trailing space
-                sort_text: Some(format!("1_{}", kw)), // Keywords after variables
+                insert_text: Some(format!("{} ", keyword)),
+                filter_text: Some((*keyword).to_string()), // Filter without trailing space
+                sort_text: Some(format!("1_{}", keyword)), // Keywords after variables
                 ..Default::default()
             });
         }
         // Boolean literals
-        for lit in ["true", "false"] {
+        for literal in BOOLEAN_LITERALS {
             items.push(CompletionItem {
-                label: lit.to_string(),
+                label: (*literal).to_string(),
                 kind: Some(CompletionItemKind::CONSTANT),
-                sort_text: Some(format!("2_{}", lit)), // Literals last
+                sort_text: Some(format!("2_{}", literal)), // Literals last
                 ..Default::default()
             });
         }
     }
 
     items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn is_inside_interpolation_open_brace() {
+        assert!(is_inside_interpolation("Hello {", 7));
+        assert!(is_inside_interpolation("Hello {x", 8));
+        assert!(is_inside_interpolation("Hello {name}! Value: {", 22));
+    }
+
+    #[test]
+    fn is_inside_interpolation_closed() {
+        assert!(!is_inside_interpolation("Hello", 5));
+        assert!(!is_inside_interpolation("Hello {x}", 9));
+        assert!(!is_inside_interpolation("Hello {x} world", 15));
+    }
+
+    #[test]
+    fn is_inside_interpolation_multiple_braces() {
+        assert!(is_inside_interpolation("{a} {b} {", 9));
+        assert!(!is_inside_interpolation("{a} {b}", 7));
+    }
+
+    #[test]
+    fn build_completion_items_deduplicates() {
+        use bobbin_syntax::Span;
+
+        let decls = vec![
+            VariableDeclaration {
+                name: "x".to_string(),
+                kind: VariableKind::Temp,
+                span: Span { start: 0, end: 1 },
+            },
+            VariableDeclaration {
+                name: "x".to_string(),
+                kind: VariableKind::Temp,
+                span: Span { start: 10, end: 11 },
+            },
+        ];
+
+        let items = build_completion_items(&decls, false);
+        let x_items: Vec<_> = items.iter().filter(|i| i.label == "x").collect();
+        assert_eq!(x_items.len(), 1);
+    }
+
+    #[test]
+    fn build_completion_items_includes_keywords_outside_interpolation() {
+        let items = build_completion_items(&[], false);
+        let keyword_items: Vec<_> = items
+            .iter()
+            .filter(|i| i.kind == Some(CompletionItemKind::KEYWORD))
+            .collect();
+        assert!(!keyword_items.is_empty());
+        assert!(keyword_items.iter().any(|i| i.label == "save"));
+    }
+
+    #[test]
+    fn build_completion_items_excludes_keywords_in_interpolation() {
+        let items = build_completion_items(&[], true);
+        let keyword_items: Vec<_> = items
+            .iter()
+            .filter(|i| i.kind == Some(CompletionItemKind::KEYWORD))
+            .collect();
+        assert!(keyword_items.is_empty());
+    }
 }

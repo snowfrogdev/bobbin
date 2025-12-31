@@ -1,5 +1,5 @@
 ---
-description: Multi-agent code review orchestrator with consensus analysis across specialized reviewers
+description: Multi-agent code review orchestrator using specialized reviewers
 allowed-tools: Read, Glob, Grep, Bash(git:*), Bash(gh:*), Task
 argument-hint: [target] - file path, folder, PR#, "branch", or "uncommitted"
 ---
@@ -13,7 +13,7 @@ You are a Review Orchestrator responsible for coordinating comprehensive code re
 When the user invokes `/review`, you will:
 1. Determine what code needs to be reviewed based on the user's request
 2. Discover all available reviewer sub-agents in `.claude/agents/`
-3. Launch 3 instances of each applicable reviewer in parallel
+3. Launch ALL reviewers in parallel (every single one, without exception)
 4. Collect and synthesize all feedback into a comprehensive final report
 
 ---
@@ -87,11 +87,11 @@ If no reviewer agents are found:
 
 ## Phase 3: Dispatch Parallel Reviews
 
-For each applicable reviewer type, launch **exactly 3 instances** using the Task tool.
+**IMPORTANT**: Launch **every** discovered reviewer sub-agent, without exception. Do NOT pre-filter reviewers based on perceived applicability—each sub-agent is responsible for determining whether it has relevant findings for the code under review. A reviewer that finds nothing to report is a valid outcome.
+
+For each discovered reviewer, launch **one instance** using the Task tool.
 
 ### Prompt Construction
-
-**CRITICAL**: All 3 instances of the SAME reviewer type MUST receive the EXACT SAME prompt. This ensures diverse perspectives on identical input, enabling meaningful consensus analysis.
 
 Construct a prompt for each reviewer type that includes:
 1. The complete code/diff to be reviewed
@@ -99,41 +99,31 @@ Construct a prompt for each reviewer type that includes:
 3. Request to perform their specialized analysis
 4. Instruction to follow their standard output format
 
-Different reviewer types may receive prompts tailored to their specialty, but all instances of the same type get identical prompts.
-
 ### Parallel Execution
 
-Launch ALL reviewer instances in parallel. Do not wait for one reviewer type to complete before starting another.
+Launch ALL reviewers in parallel. Do not wait for one reviewer to complete before starting another.
 
-**Total agents = (number of applicable reviewer types) x 3**
+**Total agents = number of discovered reviewer files** (not a subset based on perceived relevance)
 
-Example: 5 reviewer types -> 15 parallel Task invocations
+Example: 5 reviewer files discovered -> 5 parallel Task invocations (always)
 
 ### Handling Failures
 
-- If an instance fails or times out, note it in the final report and proceed with available results
-- A review with 2/3 successful instances is still valuable
-- If all 3 instances of a reviewer type fail, prominently flag this and recommend manual review for that aspect
+- If a reviewer fails or times out, note it in the final report and proceed with available results
+- If a reviewer fails, flag this and recommend manual review for that aspect
 
 ---
 
 ## Phase 4: Collect and Analyze Results
 
-Wait for all sub-agent tasks to complete. For each reviewer type, analyze the 3 responses:
-
-### Consensus Detection
-
-| Consensus Level | Definition | Confidence |
-|-----------------|------------|------------|
-| **Strong** (3/3) | All instances identified the same issue | High - prioritize this finding |
-| **Majority** (2/3) | Two instances found the same issue | Moderate - worth addressing |
-| **Weak** (1/3) | Only one instance raised the issue | Lower - flag as "mixed opinions" |
+Wait for all sub-agent tasks to complete. Analyze the responses from each reviewer:
 
 ### Cross-Reviewer Analysis
 
 Look for patterns across different reviewer types:
 - If multiple reviewer types flag the same code location -> likely significant
 - Identify compounding issues (e.g., a naming issue causing function design problems)
+- Prioritize issues flagged by multiple reviewers over single-reviewer findings
 
 ---
 
@@ -151,47 +141,37 @@ Generate a comprehensive report in this format:
 
 ## Review Coverage
 
-| Reviewer Type | Instances Run | Successful | Key Focus Area |
-|---------------|---------------|------------|----------------|
-| code-quality-reviewer | 3 | 3 | Code smells, maintainability |
-| naming-reviewer | 3 | 3 | Naming quality |
-| function-design-reviewer | 3 | 2 | Function design |
-| class-design-reviewer | 3 | 3 | Class structure |
-| test-quality-reviewer | 3 | N/A | (No test code in scope) |
+| Reviewer Type | Status | Key Focus Area |
+|---------------|--------|----------------|
+| code-quality-reviewer | Success | Code smells, maintainability |
+| naming-reviewer | Success | Naming quality |
+| function-design-reviewer | Success | Function design |
+| class-design-reviewer | Success | Class structure |
+| test-quality-reviewer | N/A | (No test code in scope) |
 
 ---
 
-## Consensus Findings
-
-Issues identified by multiple reviewers or instances, indicating high confidence.
+## Findings
 
 ### Critical Issues (Must Address)
 
-| Issue | Location | Consensus | Identified By | Recommendation |
-|-------|----------|-----------|---------------|----------------|
-| [Description] | [file:line] | Strong (3/3) | [reviewers] | [How to fix] |
+Issues that multiple reviewers flagged or that represent significant problems.
+
+| Issue | Location | Identified By | Recommendation |
+|-------|----------|---------------|----------------|
+| [Description] | [file:line] | [reviewers] | [How to fix] |
 
 ### Recommendations (Should Address)
 
-| Issue | Location | Consensus | Identified By | Recommendation |
-|-------|----------|-----------|---------------|----------------|
-| [Description] | [file:line] | Majority (2/3) | [reviewers] | [How to improve] |
+| Issue | Location | Identified By | Recommendation |
+|-------|----------|---------------|----------------|
+| [Description] | [file:line] | [reviewer] | [How to improve] |
 
 ### Suggestions (Consider Addressing)
 
 | Suggestion | Location | Identified By |
 |------------|----------|---------------|
 | [Description] | [file:line] | [reviewer] |
-
----
-
-## Areas of Disagreement
-
-Items with mixed opinions across reviewer instances. Human judgment recommended.
-
-| Topic | Instance Views | Interpretation |
-|-------|----------------|----------------|
-| [Issue] | 2 agree, 1 disagrees | [Analysis of why opinions differ] |
 
 ---
 
@@ -210,22 +190,18 @@ Positive aspects of the code that reviewers consistently praised:
 <summary>Click to expand individual reviewer reports</summary>
 
 ### Code Quality
-**Instance Consistency:** [High/Medium/Low]
 - [Finding 1]
 - [Finding 2]
 
 ### Naming
-**Instance Consistency:** [High/Medium/Low]
 - [Finding 1]
 - [Finding 2]
 
 ### Function Design
-**Instance Consistency:** [High/Medium/Low]
 - [Finding 1]
 - [Finding 2]
 
 ### Class Design
-**Instance Consistency:** [High/Medium/Low]
 - [Finding 1]
 - [Finding 2]
 
@@ -258,13 +234,12 @@ Positive aspects of the code that reviewers consistently praised:
 
 When creating the report:
 
-1. **Identify Consensus**: When 2+ instances agree OR multiple reviewer types flag the same issue, elevate its importance
+1. **Elevate Cross-Reviewer Issues**: When multiple reviewer types flag the same issue, elevate its importance
 2. **Resolve Conflicts**: When reviewers disagree, consider the specificity of each concern, whether it falls within that reviewer's specialty, and severity
 3. **Avoid Duplication**: Consolidate identical findings with attribution to all sources
 4. **Preserve Nuance**: Include specific file paths, line numbers, and code references
 5. **Prioritize Actionability**: Focus on issues the developer can actually address
-6. **Acknowledge Uncertainty**: When consensus is weak, state it rather than forcing conclusions
-7. **Credit Good Code**: Note strengths, not just problems
+6. **Credit Good Code**: Note strengths, not just problems
 
 ---
 
@@ -277,25 +252,25 @@ When creating the report:
 | File not found | Report error, continue with other files |
 | Git command fails | Report error, suggest checking git status |
 | PR not found | Report error, verify PR number/URL |
-| Agent timeout | Note in report, proceed with available results |
-| All instances of one type fail | Flag prominently, continue with other types |
-| All agents fail | Report failure, suggest manual review |
+| Reviewer timeout | Note in report, proceed with available results |
+| A reviewer fails | Flag prominently, continue with other reviewers |
+| All reviewers fail | Report failure, suggest manual review |
 
 ---
 
 ## Example Invocations
 
 **Review changes on this branch:**
--> Run `git diff main...HEAD`, dispatch to applicable reviewers
+-> Run `git diff main...HEAD`, dispatch to ALL reviewers
 
 **Review src/parser.rs:**
--> Read the file, dispatch to all applicable reviewers
+-> Read the file, dispatch to ALL reviewers
 
 **Review PR #42:**
--> Fetch PR diff with `gh pr diff 42`, dispatch to applicable reviewers
+-> Fetch PR diff with `gh pr diff 42`, dispatch to ALL reviewers
 
 **Review my uncommitted changes:**
--> Run `git diff` and `git diff --cached`, dispatch to applicable reviewers
+-> Run `git diff` and `git diff --cached`, dispatch to ALL reviewers
 
 **[With code selected in IDE] Review this:**
--> Use the selected code from context, dispatch to applicable reviewers
+-> Use the selected code from context, dispatch to ALL reviewers

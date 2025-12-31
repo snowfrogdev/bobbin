@@ -169,7 +169,13 @@ impl<'a> Resolver<'a> {
     /// - Result with SymbolTable on success, or errors on failure
     /// - All declarations found (returned even on error for IDE features)
     /// - Known variable names (for "did you mean?" suggestions)
-    pub fn analyze(mut self) -> (Result<SymbolTable, Vec<SemanticError>>, Vec<VariableDeclaration>, Vec<String>) {
+    pub fn analyze(
+        mut self,
+    ) -> (
+        Result<SymbolTable, Vec<SemanticError>>,
+        Vec<VariableDeclaration>,
+        Vec<String>,
+    ) {
         // Walk the AST
         for stmt in &self.ast.statements {
             self.resolve_stmt(stmt);
@@ -179,12 +185,16 @@ impl<'a> Resolver<'a> {
         let known_vars = self.known_variables();
 
         if self.errors.is_empty() {
-            (Ok(SymbolTable {
-                bindings: self.bindings,
-                save_bindings: self.save_bindings,
-                extern_bindings: self.extern_bindings,
-                declarations: self.declarations,
-            }), declarations, known_vars)
+            (
+                Ok(SymbolTable {
+                    bindings: self.bindings,
+                    save_bindings: self.save_bindings,
+                    extern_bindings: self.extern_bindings,
+                    declarations: self.declarations,
+                }),
+                declarations,
+                known_vars,
+            )
         } else {
             (Err(self.errors), declarations, known_vars)
         }
