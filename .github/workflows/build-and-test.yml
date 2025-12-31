@@ -158,9 +158,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Godot 4.3
+      - name: Download Godot 4.5
         run: |
-          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.5-stable/Godot_v4.5-stable_macos.universal.zip
           unzip godot.zip
           echo "GODOT4_BIN=${{ github.workspace }}/Godot.app/Contents/MacOS/Godot" >> $GITHUB_ENV
 
@@ -206,19 +206,19 @@ jobs:
       - name: Verify addon setup
         run: ls -la tests/godot_project/addons/bobbin/bin/
 
-      - name: Download Godot 4.3
+      - name: Download Godot 4.5
         run: |
-          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip
-          unzip Godot_v4.3-stable_linux.x86_64.zip
-          chmod +x Godot_v4.3-stable_linux.x86_64
+          wget -q https://github.com/godotengine/godot/releases/download/4.5-stable/Godot_v4.5-stable_linux.x86_64.zip
+          unzip Godot_v4.5-stable_linux.x86_64.zip
+          chmod +x Godot_v4.5-stable_linux.x86_64
 
       - name: Import project
-        run: ./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project --import --quit || true
+        run: ./Godot_v4.5-stable_linux.x86_64 --headless --path tests/godot_project --import --quit || true
 
       - name: Run smoke test
         run: |
           # gdext may crash during shutdown even when tests pass, so check output
-          output=$(./Godot_v4.3-stable_linux.x86_64 --headless --path tests/godot_project -s res://smoke_test.gd --quit 2>&1) || true
+          output=$(./Godot_v4.5-stable_linux.x86_64 --headless --path tests/godot_project -s res://smoke_test.gd --quit 2>&1) || true
           echo "$output"
           if echo "$output" | grep -q "All smoke tests passed"; then
             echo "Tests passed!"
@@ -278,10 +278,10 @@ jobs:
             Write-Host "DLL NOT FOUND!"
           }
 
-      - name: Download Godot 4.3
+      - name: Download Godot 4.5
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_win64.exe.zip" -OutFile godot.zip
+          Invoke-WebRequest -Uri "https://github.com/godotengine/godot/releases/download/4.5-stable/Godot_v4.5-stable_win64.exe.zip" -OutFile godot.zip
           Expand-Archive godot.zip -DestinationPath .
 
       - name: Import project
@@ -289,7 +289,7 @@ jobs:
         run: |
           # gdext may crash during import shutdown - ignore exit code
           Write-Host "=== Importing project ==="
-          $output = & ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project --import --quit 2>&1 | Out-String
+          $output = & ./Godot_v4.5-stable_win64.exe --headless --path tests/godot_project --import --quit 2>&1 | Out-String
           Write-Host $output
           Write-Host "=== Import complete (crash during shutdown is expected) ==="
           exit 0
@@ -298,7 +298,7 @@ jobs:
         shell: pwsh
         run: |
           # gdext may crash during shutdown even when tests pass, so check output
-          $output = & ./Godot_v4.3-stable_win64.exe --headless --path tests/godot_project -s res://smoke_test.gd --quit 2>&1 | Out-String
+          $output = & ./Godot_v4.5-stable_win64.exe --headless --path tests/godot_project -s res://smoke_test.gd --quit 2>&1 | Out-String
           Write-Host $output
           if ($output -match "All smoke tests passed") {
             Write-Host "Tests passed!"
@@ -339,7 +339,7 @@ jobs:
       - name: Setup Godot with export templates
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.3.0
+          version: 4.5.0
           use-dotnet: false
           include-templates: true
 
@@ -396,9 +396,9 @@ jobs:
       - name: Verify addon setup
         run: ls -la tests/godot_project/addons/bobbin/bin/
 
-      - name: Download Godot 4.3
+      - name: Download Godot 4.5
         run: |
-          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_macos.universal.zip
+          curl -L -o godot.zip https://github.com/godotengine/godot/releases/download/4.5-stable/Godot_v4.5-stable_macos.universal.zip
           unzip godot.zip
 
       - name: Remove quarantine

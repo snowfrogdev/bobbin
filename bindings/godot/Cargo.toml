@@ -6,8 +6,13 @@ edition = "2024"
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = []
+editor-tooling = ["dep:bobbin-syntax"]
+
 [dependencies]
 bobbin-runtime = { path = "../../runtime" }
+bobbin-syntax = { path = "../../syntax", optional = true }
 
 [dependencies.godot]
 git = "https://github.com/godot-rust/gdext"

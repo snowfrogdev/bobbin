@@ -1,0 +1,97 @@
+{
+  "name": "bobbin-vscode",
+  "displayName": "Bobbin",
+  "description": "Bobbin narrative scripting language support for branching dialogue and interactive stories",
+  "version": "0.1.0",
+  "publisher": "snowfrog-studio",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/snowfrog/bobbin.git"
+  },
+  "homepage": "https://github.com/snowfrog/bobbin",
+  "bugs": {
+    "url": "https://github.com/snowfrog/bobbin/issues"
+  },
+  "keywords": [
+    "bobbin",
+    "dialogue",
+    "narrative",
+    "game",
+    "scripting",
+    "branching",
+    "interactive fiction",
+    "visual novel"
+  ],
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:bobbin"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "bobbin",
+        "aliases": [
+          "Bobbin",
+          "bobbin"
+        ],
+        "extensions": [
+          ".bobbin"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "bobbin",
+        "scopeName": "source.bobbin",
+        "path": "./syntaxes/bobbin.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Bobbin",
+      "properties": {
+        "bobbin.lsp.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to bobbin-lsp executable (uses bundled or PATH if empty)"
+        },
+        "bobbin.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Traces the communication between VS Code and the language server"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -41,3 +41,9 @@ pub struct Span {
     pub start: usize,
     pub end: usize,
 }
+
+/// Language keywords for declarations and assignments.
+pub const KEYWORDS: &[&str] = &["save", "temp", "set", "extern"];
+
+/// Boolean literal values.
+pub const BOOLEAN_LITERALS: &[&str] = &["true", "false"];

@@ -69,6 +69,11 @@ impl Diagnostic {
         });
         self
     }
+
+    /// Get the primary label from this diagnostic, if any.
+    pub fn primary_label(&self) -> Option<&Label> {
+        self.labels.iter().find(|l| l.style == LabelStyle::Primary)
+    }
 }
 
 /// The severity level of a diagnostic.

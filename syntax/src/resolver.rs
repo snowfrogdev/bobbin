@@ -66,6 +66,22 @@ impl IntoDiagnostic for SemanticError {
     }
 }
 
+/// The kind of variable declaration
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VariableKind {
+    Temp,
+    Save,
+    Extern,
+}
+
+/// Information about a variable declaration (for IDE features)
+#[derive(Debug, Clone)]
+pub struct VariableDeclaration {
+    pub name: String,
+    pub kind: VariableKind,
+    pub span: Span,
+}
+
 /// Symbol table built during semantic analysis.
 /// Maps each variable usage (by NodeId) to its storage location.
 #[derive(Debug, Default)]
@@ -76,6 +92,8 @@ pub struct SymbolTable {
     pub save_bindings: HashMap<NodeId, String>,
     /// Extern variable bindings: NodeId -> variable name
     pub extern_bindings: HashMap<NodeId, String>,
+    /// All variable declarations (for IDE features like autocomplete)
+    pub declarations: Vec<VariableDeclaration>,
 }
 
 /// Information about a declared temp variable
@@ -121,6 +139,8 @@ pub struct Resolver<'a> {
     save_bindings: HashMap<NodeId, String>,
     /// Extern variable bindings: NodeId -> name
     extern_bindings: HashMap<NodeId, String>,
+    /// All variable declarations (for IDE features)
+    declarations: Vec<VariableDeclaration>,
     errors: Vec<SemanticError>,
 }
 
@@ -138,25 +158,45 @@ impl<'a> Resolver<'a> {
             bindings: HashMap::new(),
             save_bindings: HashMap::new(),
             extern_bindings: HashMap::new(),
+            declarations: Vec::new(),
             errors: Vec::new(),
         }
     }
 
-    pub fn analyze(mut self) -> Result<SymbolTable, (Vec<SemanticError>, Vec<String>)> {
+    /// Analyze the AST and build a symbol table.
+    ///
+    /// Returns a tuple of:
+    /// - Result with SymbolTable on success, or errors on failure
+    /// - All declarations found (returned even on error for IDE features)
+    /// - Known variable names (for "did you mean?" suggestions)
+    pub fn analyze(
+        mut self,
+    ) -> (
+        Result<SymbolTable, Vec<SemanticError>>,
+        Vec<VariableDeclaration>,
+        Vec<String>,
+    ) {
         // Walk the AST
         for stmt in &self.ast.statements {
             self.resolve_stmt(stmt);
         }
 
+        let declarations = self.declarations.clone();
+        let known_vars = self.known_variables();
+
         if self.errors.is_empty() {
-            Ok(SymbolTable {
-                bindings: self.bindings,
-                save_bindings: self.save_bindings,
-                extern_bindings: self.extern_bindings,
-            })
+            (
+                Ok(SymbolTable {
+                    bindings: self.bindings,
+                    save_bindings: self.save_bindings,
+                    extern_bindings: self.extern_bindings,
+                    declarations: self.declarations,
+                }),
+                declarations,
+                known_vars,
+            )
         } else {
-            let known_vars = self.known_variables();
-            Err((self.errors, known_vars))
+            (Err(self.errors), declarations, known_vars)
         }
     }
 
@@ -309,6 +349,13 @@ impl<'a> Resolver<'a> {
 
         // Record binding for this declaration
         self.bindings.insert(id, slot);
+
+        // Record declaration for IDE features
+        self.declarations.push(VariableDeclaration {
+            name: name.to_string(),
+            kind: VariableKind::Temp,
+            span,
+        });
     }
 
     /// Declare a save variable (file-global, uses external storage)
@@ -339,6 +386,13 @@ impl<'a> Resolver<'a> {
 
         // Record binding for this declaration
         self.save_bindings.insert(id, name.to_string());
+
+        // Record declaration for IDE features
+        self.declarations.push(VariableDeclaration {
+            name: name.to_string(),
+            kind: VariableKind::Save,
+            span,
+        });
     }
 
     /// Declare an extern variable (file-global, read-only, host-provided)
@@ -367,6 +421,13 @@ impl<'a> Resolver<'a> {
         // Note: No binding recorded for the declaration itself - only for references
         self.extern_vars
             .insert(name.to_string(), ExternVarInfo { span });
+
+        // Record declaration for IDE features
+        self.declarations.push(VariableDeclaration {
+            name: name.to_string(),
+            kind: VariableKind::Extern,
+            span,
+        });
     }
 
     /// Resolve a variable reference - search temp scopes, save variables, then extern variables.
