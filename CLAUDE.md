@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Bobbin is a narrative scripting language for branching dialogue and interactive stories in video games. It consists of:
 - **Runtime** (`runtime/`): Core Rust library implementing the language
-- **Godot Bindings** (`bindings/godot/`): GDExtension exposing the runtime to Godot 4.3+
+- **Godot Bindings** (`bindings/godot/`): GDExtension exposing the runtime to Godot 4.5+
 
 ## Build Commands
 

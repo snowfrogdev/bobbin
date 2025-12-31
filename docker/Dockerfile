@@ -7,8 +7,8 @@ RUN apt-get update && apt-get install -y \
     unzip wget git \
     && rm -rf /var/lib/apt/lists/*
 
-# Godot 4.3 (for api-custom binding generation)
-ENV GODOT_VERSION=4.3
+# Godot 4.5 (for api-custom binding generation)
+ENV GODOT_VERSION=4.5
 RUN wget -q https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip \
     && unzip Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip -d /opt \
     && mv /opt/Godot_v${GODOT_VERSION}-stable_linux.x86_64 /opt/godot \

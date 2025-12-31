@@ -1,7 +1,9 @@
-use crate::chunk::{Chunk, Instruction, Value};
-use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic, Severity};
-use crate::storage::{HostState, VariableStorage};
 use std::sync::Arc;
+
+use bobbin_syntax::{Diagnostic, DiagnosticContext, IntoDiagnostic, Severity};
+
+use crate::chunk::{Chunk, Instruction, Value};
+use crate::storage::{HostState, VariableStorage};
 
 #[derive(Debug, Clone)]
 pub enum RuntimeError {

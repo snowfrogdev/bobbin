@@ -16,10 +16,12 @@
 
 mod convert;
 mod fuzzy;
+mod position;
 mod render;
 mod types;
 
 pub use convert::{DiagnosticContext, IntoDiagnostic};
 pub use fuzzy::{JaroWinklerMatcher, Matcher};
+pub use position::{LineIndex, SourcePosition};
 pub use render::{AriadneRenderer, Renderer};
 pub use types::{Diagnostic, Label, LabelStyle, Severity, Suggestion};
