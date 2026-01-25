@@ -249,6 +249,10 @@ impl<'a> Compiler<'a> {
                 match op {
                     BinaryOp::Equal => self.chunk.emit(Instruction::Equal, span.start),
                     BinaryOp::NotEqual => self.chunk.emit(Instruction::NotEqual, span.start),
+                    BinaryOp::Less => self.chunk.emit(Instruction::Less, span.start),
+                    BinaryOp::LessEqual => self.chunk.emit(Instruction::LessEqual, span.start),
+                    BinaryOp::Greater => self.chunk.emit(Instruction::Greater, span.start),
+                    BinaryOp::GreaterEqual => self.chunk.emit(Instruction::GreaterEqual, span.start),
                 }
             }
         }

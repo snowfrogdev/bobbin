@@ -220,6 +220,102 @@ fn errors_type_mismatch_literal_literal() {
 }
 
 // ============================================
+// Ordering Comparison Tests (<, <=, >, >=)
+// ============================================
+
+#[test]
+fn comparison_less_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_less_true.bobbin"));
+}
+
+#[test]
+fn comparison_less_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_less_false.bobbin"));
+}
+
+#[test]
+fn comparison_less_equal_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_less_equal_true.bobbin"));
+}
+
+#[test]
+fn comparison_less_equal_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_less_equal_false.bobbin"));
+}
+
+#[test]
+fn comparison_greater_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_greater_true.bobbin"));
+}
+
+#[test]
+fn comparison_greater_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_greater_false.bobbin"));
+}
+
+#[test]
+fn comparison_greater_equal_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_greater_equal_true.bobbin"));
+}
+
+#[test]
+fn comparison_greater_equal_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_greater_equal_false.bobbin"));
+}
+
+#[test]
+fn comparison_negative_numbers() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_negative_numbers.bobbin"));
+}
+
+#[test]
+fn comparison_float_numbers() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_float_numbers.bobbin"));
+}
+
+#[test]
+fn comparison_literal_left() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_literal_left.bobbin"));
+}
+
+#[test]
+fn comparison_literals_only() {
+    support::run_output_test(&support::cases_dir().join("expressions/comparison_literals_only.bobbin"));
+}
+
+// ============================================
+// Error Tests (Comparison Requires Numeric)
+// ============================================
+
+#[test]
+fn errors_comparison_string_operand() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/comparison_string_operand.bobbin"),
+    );
+}
+
+#[test]
+fn errors_comparison_bool_operand() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/comparison_bool_operand.bobbin"),
+    );
+}
+
+#[test]
+fn errors_comparison_string_string() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/comparison_string_string.bobbin"),
+    );
+}
+
+#[test]
+fn errors_comparison_bool_bool() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/comparison_bool_bool.bobbin"),
+    );
+}
+
+// ============================================
 // Error Tests (Undefined Variables in Comparisons)
 // ============================================
 

@@ -322,6 +322,32 @@ impl<'a> Scanner<'a> {
             return Ok(self.make_token(TokenKind::BangEqual));
         }
 
+        // <= operator (check before lone <)
+        if current_char == '<' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::LessEqual));
+        }
+
+        // < operator
+        if current_char == '<' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Less));
+        }
+
+        // >= operator (check before lone >)
+        if current_char == '>' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::GreaterEqual));
+        }
+
+        // > operator
+        if current_char == '>' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Greater));
+        }
+
         // Reject lone = with helpful error
         if current_char == '=' {
             self.advance();
@@ -696,5 +722,31 @@ mod tests {
     fn multiple_spaces_around_operator() {
         let kinds = token_kinds("{x  ==  y}");
         assert!(kinds.contains(&TokenKind::EqualEqual));
+    }
+
+    // === Comparison Operator Tests ===
+
+    #[test]
+    fn less_than_operator_in_interpolation() {
+        let kinds = token_kinds("{x < y}");
+        assert!(kinds.contains(&TokenKind::Less));
+    }
+
+    #[test]
+    fn less_equal_operator_in_interpolation() {
+        let kinds = token_kinds("{x <= y}");
+        assert!(kinds.contains(&TokenKind::LessEqual));
+    }
+
+    #[test]
+    fn greater_than_operator_in_interpolation() {
+        let kinds = token_kinds("{x > y}");
+        assert!(kinds.contains(&TokenKind::Greater));
+    }
+
+    #[test]
+    fn greater_equal_operator_in_interpolation() {
+        let kinds = token_kinds("{x >= y}");
+        assert!(kinds.contains(&TokenKind::GreaterEqual));
     }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
+use crate::ast::{BinaryOp, Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::token::Span;
 
@@ -52,6 +52,13 @@ pub enum SemanticError {
         left_type: ValueType,
         right_desc: String,
         right_type: ValueType,
+        span: Span,
+    },
+    /// Ordering comparison operators (<, >, <=, >=) require numeric operands
+    ComparisonRequiresNumber {
+        op: String,
+        operand_desc: String,
+        operand_type: ValueType,
         span: Span,
     },
 }
@@ -114,6 +121,23 @@ impl IntoDiagnostic for SemanticError {
                 span,
                 format!("cannot compare {} to {}", left_type.name(), right_type.name()),
             ),
+            SemanticError::ComparisonRequiresNumber {
+                op,
+                operand_desc,
+                operand_type,
+                span,
+            } => Diagnostic::error(
+                format!(
+                    "operator '{}' requires numeric operands, but {} is {}",
+                    op,
+                    operand_desc,
+                    operand_type.name()
+                ),
+                span,
+                format!("cannot compare {} values with '{}'", operand_type.name(), op),
+            )
+            .with_note("Comparison operators (<, >, <=, >=) only work with numbers")
+            .with_note("Use == or != to compare strings and booleans"),
         }
     }
 }
@@ -335,10 +359,10 @@ impl<'a> Resolver<'a> {
             Expr::VarRef { id, name, span } => {
                 self.resolve_reference(*id, name, *span, false);
             }
-            Expr::Binary { left, right, span, .. } => {
+            Expr::Binary { left, right, op, span, .. } => {
                 self.resolve_expr(left);
                 self.resolve_expr(right);
-                self.check_expr_types(left, right, *span);
+                self.check_expr_types(left, right, *op, *span);
             }
         }
     }
@@ -354,7 +378,13 @@ impl<'a> Resolver<'a> {
     }
 
     /// Check that both operands of an expression comparison have compatible types.
-    fn check_expr_types(&mut self, left: &crate::ast::Expr, right: &crate::ast::Expr, span: Span) {
+    fn check_expr_types(
+        &mut self,
+        left: &crate::ast::Expr,
+        right: &crate::ast::Expr,
+        op: BinaryOp,
+        span: Span,
+    ) {
         let left_type = match self.expr_type(left) {
             Some(t) => t,
             None => return, // Extern or undefined - skip type checking
@@ -365,6 +395,32 @@ impl<'a> Resolver<'a> {
             None => return, // Extern or undefined - skip type checking
         };
 
+        // Ordering comparisons (<, >, <=, >=) require numbers
+        if matches!(
+            op,
+            BinaryOp::Less | BinaryOp::LessEqual | BinaryOp::Greater | BinaryOp::GreaterEqual
+        ) {
+            let op_str = Self::op_to_string(op);
+            if left_type != ValueType::Number {
+                self.errors.push(SemanticError::ComparisonRequiresNumber {
+                    op: op_str.clone(),
+                    operand_desc: self.describe_expr(left),
+                    operand_type: left_type,
+                    span: left.span(),
+                });
+            }
+            if right_type != ValueType::Number {
+                self.errors.push(SemanticError::ComparisonRequiresNumber {
+                    op: op_str,
+                    operand_desc: self.describe_expr(right),
+                    operand_type: right_type,
+                    span: right.span(),
+                });
+            }
+            return;
+        }
+
+        // Equality comparisons (==, !=) require same type
         if left_type != right_type {
             self.errors.push(SemanticError::TypeMismatch {
                 left_name: self.describe_expr(left),
@@ -373,6 +429,18 @@ impl<'a> Resolver<'a> {
                 right_type,
                 span,
             });
+        }
+    }
+
+    /// Convert a BinaryOp to its string representation for error messages.
+    fn op_to_string(op: BinaryOp) -> String {
+        match op {
+            BinaryOp::Equal => "==".to_string(),
+            BinaryOp::NotEqual => "!=".to_string(),
+            BinaryOp::Less => "<".to_string(),
+            BinaryOp::LessEqual => "<=".to_string(),
+            BinaryOp::Greater => ">".to_string(),
+            BinaryOp::GreaterEqual => ">=".to_string(),
         }
     }
 

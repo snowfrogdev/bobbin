@@ -47,6 +47,14 @@ pub enum Instruction {
     Equal,
     /// Pop two values, push true if not equal, false otherwise.
     NotEqual,
+    /// Pop two values (numbers), push true if first < second.
+    Less,
+    /// Pop two values (numbers), push true if first <= second.
+    LessEqual,
+    /// Pop two values (numbers), push true if first > second.
+    Greater,
+    /// Pop two values (numbers), push true if first >= second.
+    GreaterEqual,
     Return,
 }
 

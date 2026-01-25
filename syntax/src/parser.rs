@@ -244,12 +244,26 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
 
         // Check for comparison operator
         match self.tokens.peek() {
-            Some(Ok(t)) if t.kind == TokenKind::EqualEqual || t.kind == TokenKind::BangEqual => {
+            Some(Ok(t))
+                if matches!(
+                    t.kind,
+                    TokenKind::EqualEqual
+                        | TokenKind::BangEqual
+                        | TokenKind::Less
+                        | TokenKind::LessEqual
+                        | TokenKind::Greater
+                        | TokenKind::GreaterEqual
+                ) =>
+            {
                 let op_token = self.advance();
-                let op = if op_token.kind == TokenKind::EqualEqual {
-                    BinaryOp::Equal
-                } else {
-                    BinaryOp::NotEqual
+                let op = match op_token.kind {
+                    TokenKind::EqualEqual => BinaryOp::Equal,
+                    TokenKind::BangEqual => BinaryOp::NotEqual,
+                    TokenKind::Less => BinaryOp::Less,
+                    TokenKind::LessEqual => BinaryOp::LessEqual,
+                    TokenKind::Greater => BinaryOp::Greater,
+                    TokenKind::GreaterEqual => BinaryOp::GreaterEqual,
+                    _ => unreachable!(),
                 };
 
                 // Parse right operand

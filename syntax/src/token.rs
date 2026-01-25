@@ -22,8 +22,12 @@ pub enum TokenKind {
 
     // Symbols
     Equals,
-    EqualEqual,  // ==
-    BangEqual,   // !=
+    EqualEqual,   // ==
+    BangEqual,    // !=
+    Less,         // <
+    LessEqual,    // <=
+    Greater,      // >
+    GreaterEqual, // >=
     OpenBrace,
     CloseBrace,
 

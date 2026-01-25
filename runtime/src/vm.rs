@@ -244,6 +244,26 @@ impl VM {
                     };
                     self.stack.push(Value::Bool(result));
                 }
+                Instruction::Less
+                | Instruction::LessEqual
+                | Instruction::Greater
+                | Instruction::GreaterEqual => {
+                    let b = self.stack.pop().expect("stack underflow: compiler bug");
+                    let a = self.stack.pop().expect("stack underflow: compiler bug");
+
+                    let result = match (&a, &b) {
+                        (Value::Number(a_num), Value::Number(b_num)) => match instruction {
+                            Instruction::Less => a_num < b_num,
+                            Instruction::LessEqual => a_num <= b_num,
+                            Instruction::Greater => a_num > b_num,
+                            Instruction::GreaterEqual => a_num >= b_num,
+                            _ => unreachable!(),
+                        },
+                        // Type-checked by resolver; defensive fallback
+                        _ => false,
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK
                     return Ok(StepResult::Done);

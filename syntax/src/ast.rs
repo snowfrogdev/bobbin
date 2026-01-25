@@ -48,8 +48,12 @@ pub enum Literal {
 /// Binary operator for expressions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
-    Equal,    // ==
-    NotEqual, // !=
+    Equal,        // ==
+    NotEqual,     // !=
+    Less,         // <
+    LessEqual,    // <=
+    Greater,      // >
+    GreaterEqual, // >=
 }
 
 /// A general expression that can be evaluated to produce a value.
@@ -57,7 +61,7 @@ pub enum BinaryOp {
 /// This is the foundation for the expression system. Currently supports:
 /// - Literals (numbers, strings, booleans)
 /// - Variable references
-/// - Binary comparisons (==, !=)
+/// - Binary comparisons (==, !=, <, <=, >, >=)
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// A literal value (number, string, boolean)

@@ -43,7 +43,7 @@ interpolation = "{" , expression , "}" ;
 expression    = comparison ;
 comparison    = primary , [ compare_op , primary ] ;
 primary       = identifier | literal ;
-compare_op    = "==" | "!=" ;
+compare_op    = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
 escaped_brace = "{{" | "}}" ;
 text_char     = ? any character except "{", "}", and newline ? ;
 ```
@@ -101,23 +101,28 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - Lines and choice text may contain interpolations: `{expression}`
 - Use `{{` for a literal `{` character, `}}` for a literal `}`
 - **Simple interpolation**: `{variable_name}` displays the variable's value
-- **Comparison expressions**: `{x == y}` and `{x != y}`
+- **Equality expressions**: `{x == y}` and `{x != y}`
   - Both operands can be variables or literals (symmetric expressions)
   - Supported forms: `{var == var}`, `{var == literal}`, `{literal == var}`, `{literal == literal}`
   - Result is `true` or `false` (displayed as text)
   - Both operands must have the same type (type mismatch is a semantic error)
+- **Ordering expressions**: `{x < y}`, `{x <= y}`, `{x > y}`, `{x >= y}`
+  - Both operands must be **numbers** (strings and booleans are not allowed)
+  - Result is `true` or `false` (displayed as text)
+  - Comparing non-numeric types is a semantic error
 - Examples:
   - `Welcome, {player_name}! You have {gold} gold.`
   - `Is ready: {count == 10}` or `Different names: {name != "Bob"}`
   - `Is ten: {10 == count}` (literal on left side)
   - `Always true: {true == true}` (literal-to-literal comparison)
+  - `Low health: {health < 10}` or `Enough gold: {gold >= 100}`
 
 ## Future Syntax (TBD)
 
 The following syntax elements are planned but not yet specified:
 
 - **Compound assignment operators**: `+=`, `-=`, `*=`, `/=`
-- **Expressions**: Arithmetic and logical operators (equality comparisons `==`/`!=` are implemented)
+- **Expressions**: Arithmetic and logical operators (comparison operators `==`, `!=`, `<`, `<=`, `>`, `>=` are implemented)
 - **Conditionals**: `if`/`else` structure
 - **Tables**: Literal syntax, access syntax, methods
 - **Parentheses in expressions**: `{(a == b) == true}` for grouping
