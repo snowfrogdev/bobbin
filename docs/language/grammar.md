@@ -39,7 +39,11 @@ digit  = "0" | ... | "9" ;
 
 text          = { text_segment }+ ;
 text_segment  = text_char | interpolation | escaped_brace ;
-interpolation = "{" , identifier , "}" ;
+interpolation = "{" , expression , "}" ;
+expression    = comparison ;
+comparison    = primary , [ compare_op , primary ] ;
+primary       = identifier | literal ;
+compare_op    = "==" | "!=" ;
 escaped_brace = "{{" | "}}" ;
 text_char     = ? any character except "{", "}", and newline ? ;
 ```
@@ -94,19 +98,28 @@ text_char     = ? any character except "{", "}", and newline ? ;
 
 ### Interpolation
 
-- Lines and choice text may contain interpolations: `{variable_name}`
+- Lines and choice text may contain interpolations: `{expression}`
 - Use `{{` for a literal `{` character, `}}` for a literal `}`
-- Only variable names are currently supported (expressions TBD)
-- Example: `Welcome, {player_name}! You have {gold} gold.`
+- **Simple interpolation**: `{variable_name}` displays the variable's value
+- **Comparison expressions**: `{x == y}` and `{x != y}`
+  - Both operands can be variables or literals (symmetric expressions)
+  - Supported forms: `{var == var}`, `{var == literal}`, `{literal == var}`, `{literal == literal}`
+  - Result is `true` or `false` (displayed as text)
+  - Both operands must have the same type (type mismatch is a semantic error)
+- Examples:
+  - `Welcome, {player_name}! You have {gold} gold.`
+  - `Is ready: {count == 10}` or `Different names: {name != "Bob"}`
+  - `Is ten: {10 == count}` (literal on left side)
+  - `Always true: {true == true}` (literal-to-literal comparison)
 
 ## Future Syntax (TBD)
 
 The following syntax elements are planned but not yet specified:
 
 - **Compound assignment operators**: `+=`, `-=`, `*=`, `/=`
-- **Expressions**: Arithmetic, comparison, and logical operators
+- **Expressions**: Arithmetic and logical operators (equality comparisons `==`/`!=` are implemented)
 - **Conditionals**: `if`/`else` structure
 - **Tables**: Literal syntax, access syntax, methods
-- **Interpolation expressions**: Expressions beyond variable names inside `{...}`
+- **Parentheses in expressions**: `{(a == b) == true}` for grouping
 - **Imports**: Module system syntax
 - **Commands**: Syntax for triggering game effects (giving items, playing sounds, etc.)

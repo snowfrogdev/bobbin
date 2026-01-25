@@ -1,0 +1,3 @@
+True equals true: {true == true}
+False equals false: {false == false}
+True equals false: {true == false}

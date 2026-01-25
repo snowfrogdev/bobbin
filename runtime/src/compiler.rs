@@ -1,4 +1,6 @@
-use bobbin_syntax::{Literal, NodeId, Script, Stmt, SymbolTable, TextPart, VarBindingData};
+use bobbin_syntax::{
+    BinaryOp, Expr, Literal, NodeId, Script, Stmt, SymbolTable, TextPart, VarBindingData,
+};
 
 use crate::chunk::{Chunk, Instruction, Value};
 
@@ -192,15 +194,15 @@ impl<'a> Compiler<'a> {
             }
         }
 
-        // Multiple parts or single var ref - push all and concat
+        // Multiple parts or single expression - push all and concat
         for part in parts {
             match part {
                 TextPart::Literal { text, span } => {
                     let index = self.chunk.add_constant(Value::String(text.clone()));
                     self.chunk.emit(Instruction::Constant { index }, span.start);
                 }
-                TextPart::VarRef { id, span, .. } => {
-                    self.emit_var_read(*id, span.start);
+                TextPart::Expr { expr, .. } => {
+                    self.compile_expr(expr);
                 }
             }
         }
@@ -221,5 +223,34 @@ impl<'a> Compiler<'a> {
         };
         let index = self.chunk.add_constant(value);
         self.chunk.emit(Instruction::Constant { index }, line);
+    }
+
+    /// Compile an expression and leave the result on the stack.
+    fn compile_expr(&mut self, expr: &Expr) {
+        match expr {
+            Expr::Literal { value, span } => {
+                self.compile_literal(value, span.start);
+            }
+            Expr::VarRef { id, span, .. } => {
+                self.emit_var_read(*id, span.start);
+            }
+            Expr::Binary {
+                left,
+                op,
+                right,
+                span,
+                ..
+            } => {
+                // Compile left operand
+                self.compile_expr(left);
+                // Compile right operand
+                self.compile_expr(right);
+                // Emit comparison instruction
+                match op {
+                    BinaryOp::Equal => self.chunk.emit(Instruction::Equal, span.start),
+                    BinaryOp::NotEqual => self.chunk.emit(Instruction::NotEqual, span.start),
+                }
+            }
+        }
     }
 }

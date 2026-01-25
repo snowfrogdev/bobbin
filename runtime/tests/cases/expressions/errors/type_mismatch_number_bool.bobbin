@@ -1,0 +1,3 @@
+temp num = 1
+temp flag = true
+{num == flag}

@@ -1,0 +1,3 @@
+temp name = "Alice"
+Is Alice: {name == "Alice"}
+Is Bob: {name == "Bob"}

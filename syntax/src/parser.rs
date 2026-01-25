@@ -1,6 +1,9 @@
 use std::iter::Peekable;
 
-use crate::ast::{Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
+use crate::ast::{
+    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart,
+    VarBindingData,
+};
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::scanner::LexicalError;
 use crate::token::{Span, Token, TokenKind};
@@ -233,6 +236,124 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         }
     }
 
+    /// Parse an expression inside interpolation braces: `{expr}` or `{expr == expr}`
+    /// Returns the full expression and its span.
+    fn parse_interpolation_expr(&mut self, start: usize) -> Option<(Expr, Span)> {
+        // Parse left/primary expression
+        let (left, left_end) = self.parse_expr_primary()?;
+
+        // Check for comparison operator
+        match self.tokens.peek() {
+            Some(Ok(t)) if t.kind == TokenKind::EqualEqual || t.kind == TokenKind::BangEqual => {
+                let op_token = self.advance();
+                let op = if op_token.kind == TokenKind::EqualEqual {
+                    BinaryOp::Equal
+                } else {
+                    BinaryOp::NotEqual
+                };
+
+                // Parse right operand
+                match self.parse_expr_primary() {
+                    Some((right, right_end)) => {
+                        let span = Span {
+                            start,
+                            end: right_end,
+                        };
+                        Some((
+                            Expr::Binary {
+                                id: self.next_id(),
+                                left: Box::new(left),
+                                op,
+                                right: Box::new(right),
+                                span,
+                            },
+                            span,
+                        ))
+                    }
+                    None => {
+                        self.errors.push(ParseError::Syntax {
+                            message: "Expected expression after comparison operator".to_string(),
+                            span: op_token.span,
+                        });
+                        None
+                    }
+                }
+            }
+            _ => {
+                // Just a simple expression (variable or literal)
+                let span = Span {
+                    start,
+                    end: left_end,
+                };
+                Some((left, span))
+            }
+        }
+    }
+
+    /// Parse a primary expression: variable reference or literal value.
+    /// Returns the expression and the span end position.
+    fn parse_expr_primary(&mut self) -> Option<(Expr, usize)> {
+        match self.tokens.peek() {
+            Some(Ok(t)) => match t.kind {
+                TokenKind::Identifier => {
+                    let token = self.advance();
+                    Some((
+                        Expr::VarRef {
+                            id: self.next_id(),
+                            name: token.lexeme.to_string(),
+                            span: token.span,
+                        },
+                        token.span.end,
+                    ))
+                }
+                TokenKind::String => {
+                    let token = self.advance();
+                    let s = unescape_string(&token.lexeme[1..token.lexeme.len() - 1]);
+                    Some((
+                        Expr::Literal {
+                            value: Literal::String(s),
+                            span: token.span,
+                        },
+                        token.span.end,
+                    ))
+                }
+                TokenKind::Number => {
+                    let token = self.advance();
+                    let n: f64 = token.lexeme.parse().unwrap_or(0.0);
+                    Some((
+                        Expr::Literal {
+                            value: Literal::Number(n),
+                            span: token.span,
+                        },
+                        token.span.end,
+                    ))
+                }
+                TokenKind::True => {
+                    let token = self.advance();
+                    Some((
+                        Expr::Literal {
+                            value: Literal::Bool(true),
+                            span: token.span,
+                        },
+                        token.span.end,
+                    ))
+                }
+                TokenKind::False => {
+                    let token = self.advance();
+                    Some((
+                        Expr::Literal {
+                            value: Literal::Bool(false),
+                            span: token.span,
+                        },
+                        token.span.end,
+                    ))
+                }
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Parse a variable binding: identifier = literal
     /// Used by both temp declarations and assignments.
     /// The keyword token should already be consumed.
@@ -319,38 +440,33 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                             start = Some(open.span.start);
                         }
 
-                        // Expect identifier
-                        match self.tokens.peek() {
-                            Some(Ok(t)) if t.kind == TokenKind::Identifier => {
-                                let id_token = self.advance();
-                                let var_name = id_token.lexeme.to_string();
-
+                        // Parse expression inside braces using the new expression grammar
+                        match self.parse_interpolation_expr(open.span.start) {
+                            Some((expr, expr_span)) => {
                                 // Expect close brace
-                                match self.tokens.peek() {
-                                    Some(Ok(t)) if t.kind == TokenKind::CloseBrace => {
-                                        let close = self.advance();
-                                        end = close.span.end;
-                                        parts.push(TextPart::VarRef {
-                                            id: self.next_id(),
-                                            name: var_name,
-                                            span: Span {
-                                                start: open.span.start,
-                                                end: close.span.end,
-                                            },
-                                        });
-                                    }
-                                    _ => {
-                                        self.errors.push(ParseError::Syntax {
-                                            message: "Expected '}' after variable name".to_string(),
-                                            span: id_token.span,
-                                        });
-                                        end = id_token.span.end;
-                                    }
+                                if self.check(TokenKind::CloseBrace) {
+                                    let close = self.advance();
+                                    end = close.span.end;
+                                    let full_span = Span {
+                                        start: open.span.start,
+                                        end: close.span.end,
+                                    };
+                                    parts.push(TextPart::Expr {
+                                        expr,
+                                        span: full_span,
+                                    });
+                                } else {
+                                    let span = self.current_span();
+                                    self.errors.push(ParseError::Syntax {
+                                        message: "Expected '}' after expression".to_string(),
+                                        span,
+                                    });
+                                    end = expr_span.end;
                                 }
                             }
-                            _ => {
+                            None => {
                                 self.errors.push(ParseError::Syntax {
-                                    message: "Expected variable name after '{'".to_string(),
+                                    message: "Expected expression after '{'".to_string(),
                                     span: open.span,
                                 });
                                 end = open.span.end;
@@ -528,4 +644,161 @@ fn unescape_string(s: &str) -> String {
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::scanner::Scanner;
+
+    fn parse_source(source: &str) -> Result<Script, Vec<ParseError>> {
+        let scanner = Scanner::new(source);
+        let parser = Parser::new(scanner.tokens());
+        parser.parse()
+    }
+
+    fn get_text_parts(source: &str) -> Vec<TextPart> {
+        let script = parse_source(source).expect("Parse failed");
+        match &script.statements[0] {
+            Stmt::Line { parts, .. } => parts.clone(),
+            _ => panic!("Expected Line statement"),
+        }
+    }
+
+    // === Success Cases: Equality Expressions ===
+
+    #[test]
+    fn parse_equality_two_variables() {
+        let parts = get_text_parts("{x == y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Equal, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_inequality_two_variables() {
+        let parts = get_text_parts("{x != y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::NotEqual, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_equality_with_string() {
+        let parts = get_text_parts("{x == \"hello\"}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Equal, .. },
+                ..
+            }
+        ));
+        // Also verify right operand is a string literal
+        if let TextPart::Expr { expr: Expr::Binary { right, .. }, .. } = &parts[0] {
+            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::String(_), .. }));
+        }
+    }
+
+    #[test]
+    fn parse_equality_with_number() {
+        let parts = get_text_parts("{x == 42}");
+        if let TextPart::Expr { expr: Expr::Binary { right, .. }, .. } = &parts[0] {
+            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::Number(_), .. }));
+        } else {
+            panic!("Expected Binary expression");
+        }
+    }
+
+    #[test]
+    fn parse_equality_with_negative_number() {
+        let parts = get_text_parts("{x == -5}");
+        if let TextPart::Expr { expr: Expr::Binary { right, .. }, .. } = &parts[0] {
+            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::Number(_), .. }));
+        } else {
+            panic!("Expected Binary expression");
+        }
+    }
+
+    #[test]
+    fn parse_equality_with_true() {
+        let parts = get_text_parts("{x == true}");
+        if let TextPart::Expr { expr: Expr::Binary { right, .. }, .. } = &parts[0] {
+            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::Bool(true), .. }));
+        } else {
+            panic!("Expected Binary expression");
+        }
+    }
+
+    #[test]
+    fn parse_equality_with_false() {
+        let parts = get_text_parts("{x == false}");
+        if let TextPart::Expr { expr: Expr::Binary { right, .. }, .. } = &parts[0] {
+            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::Bool(false), .. }));
+        } else {
+            panic!("Expected Binary expression");
+        }
+    }
+
+    // === Simple Variable References ===
+
+    #[test]
+    fn parse_simple_var_ref_still_works() {
+        let parts = get_text_parts("{name}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr { expr: Expr::VarRef { name, .. }, .. } if name == "name"
+        ));
+    }
+
+    #[test]
+    fn parse_text_with_var_ref() {
+        let parts = get_text_parts("Hello, {name}!");
+        assert_eq!(parts.len(), 3);
+        assert!(matches!(&parts[0], TextPart::Literal { .. }));
+        assert!(matches!(&parts[1], TextPart::Expr { expr: Expr::VarRef { .. }, .. }));
+        assert!(matches!(&parts[2], TextPart::Literal { .. }));
+    }
+
+    // === Edge Cases ===
+
+    #[test]
+    fn parse_equality_no_spaces() {
+        let parts = get_text_parts("{x==y}");
+        assert!(matches!(&parts[0], TextPart::Expr { expr: Expr::Binary { .. }, .. }));
+    }
+
+    #[test]
+    fn parse_equality_extra_spaces() {
+        let parts = get_text_parts("{x  ==  y}");
+        assert!(matches!(&parts[0], TextPart::Expr { expr: Expr::Binary { .. }, .. }));
+    }
+
+    #[test]
+    fn parse_mixed_content() {
+        let parts = get_text_parts("Result: {x == y} done");
+        assert_eq!(parts.len(), 3);
+        assert!(matches!(&parts[1], TextPart::Expr { expr: Expr::Binary { .. }, .. }));
+    }
+
+    // === Error Cases ===
+
+    #[test]
+    fn parse_error_missing_right_operand() {
+        let result = parse_source("{x ==}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_error_unexpected_after_var() {
+        let result = parse_source("{x + y}");
+        assert!(result.is_err());
+    }
 }

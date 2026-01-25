@@ -1,0 +1,5 @@
+temp a = ""
+temp b = ""
+temp c = "x"
+a equals b: {a == b}
+a equals c: {a == c}

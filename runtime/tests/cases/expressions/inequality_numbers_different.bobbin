@@ -1,0 +1,3 @@
+temp a = 42
+temp b = 99
+{a != b}

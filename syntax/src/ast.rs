@@ -28,27 +28,63 @@ pub struct Choice {
     pub nested: Vec<Stmt>,
 }
 
-/// A part of text content - either literal text or a variable reference
+/// A part of text content - literal text or expression
 #[derive(Debug, Clone)]
 pub enum TextPart {
-    Literal {
-        text: String,
-        span: Span,
-    },
-    VarRef {
-        id: NodeId,
-        name: String,
-        span: Span,
-    },
+    /// Plain text content
+    Literal { text: String, span: Span },
+    /// General expression (variable reference, comparison, etc.)
+    Expr { expr: Expr, span: Span },
 }
 
-/// A literal value in declarations
+/// A literal value in declarations and expressions
 #[derive(Debug, Clone)]
 pub enum Literal {
     String(String),
     Number(f64),
     Bool(bool),
 }
+
+/// Binary operator for expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Equal,    // ==
+    NotEqual, // !=
+}
+
+/// A general expression that can be evaluated to produce a value.
+///
+/// This is the foundation for the expression system. Currently supports:
+/// - Literals (numbers, strings, booleans)
+/// - Variable references
+/// - Binary comparisons (==, !=)
+#[derive(Debug, Clone)]
+pub enum Expr {
+    /// A literal value (number, string, boolean)
+    Literal { value: Literal, span: Span },
+    /// A reference to a variable
+    VarRef { id: NodeId, name: String, span: Span },
+    /// A binary operation (currently comparisons only)
+    Binary {
+        id: NodeId,
+        left: Box<Expr>,
+        op: BinaryOp,
+        right: Box<Expr>,
+        span: Span,
+    },
+}
+
+impl Expr {
+    /// Get the span of this expression
+    pub fn span(&self) -> Span {
+        match self {
+            Expr::Literal { span, .. } => *span,
+            Expr::VarRef { span, .. } => *span,
+            Expr::Binary { span, .. } => *span,
+        }
+    }
+}
+
 
 /// Shared data for variable binding operations (declarations and assignments)
 #[derive(Debug, Clone)]

@@ -1,0 +1,5 @@
+temp a = 3.14
+temp b = 3.14
+temp c = 3.15
+a equals b: {a == b}
+a equals c: {a == c}

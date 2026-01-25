@@ -1,0 +1,3 @@
+temp flag = true
+Not true: {true != flag}
+Not false: {false != flag}

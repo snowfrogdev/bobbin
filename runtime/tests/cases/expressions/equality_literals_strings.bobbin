@@ -1,0 +1,3 @@
+Same: {"hello" == "hello"}
+Different: {"hello" == "world"}
+Empty: {"" == ""}

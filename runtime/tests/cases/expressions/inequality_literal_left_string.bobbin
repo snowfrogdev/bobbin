@@ -1,0 +1,3 @@
+temp greeting = "hello"
+Not hello: {"hello" != greeting}
+Not bye: {"bye" != greeting}

@@ -1,0 +1,3 @@
+temp count = 10
+Is ten: {10 == count}
+Is twenty: {20 == count}

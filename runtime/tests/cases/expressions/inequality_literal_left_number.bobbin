@@ -1,0 +1,3 @@
+temp count = 10
+Not ten: {10 != count}
+Not twenty: {20 != count}

@@ -1,0 +1,5 @@
+temp a = -5
+temp b = -5
+temp c = 5
+a equals b: {a == b}
+a equals c: {a == c}

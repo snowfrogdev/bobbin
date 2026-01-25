@@ -1,0 +1,5 @@
+temp x = 100
+temp y = 100
+temp z = 50
+x equals y: {x == y}
+x equals z: {x == z}

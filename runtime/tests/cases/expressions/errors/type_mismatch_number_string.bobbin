@@ -1,0 +1,3 @@
+temp num = 42
+temp str = "42"
+{num == str}

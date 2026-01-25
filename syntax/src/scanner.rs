@@ -289,7 +289,7 @@ impl<'a> Scanner<'a> {
         Ok(self.make_token(TokenKind::TextSegment))
     }
 
-    /// Scan inside an interpolation - expect identifier then }
+    /// Scan inside an interpolation - handles operators, literals, and identifiers
     fn scan_interpolation_content(&mut self) -> Result<Token<'a>, LexicalError> {
         self.skip_spaces();
         self.start = self.current;
@@ -299,21 +299,59 @@ impl<'a> Scanner<'a> {
             return Err(self.error("Unclosed interpolation - expected '}'"));
         }
 
-        let c = self.peek().unwrap();
+        let current_char = self.peek().unwrap();
 
-        // Closing brace
-        if c == '}' {
+        // Closing brace - end interpolation
+        if current_char == '}' {
             self.advance();
             self.mode = ScanMode::Text;
             return Ok(self.make_token(TokenKind::CloseBrace));
         }
 
-        // Identifier
-        if c.is_ascii_alphabetic() || c == '_' {
-            return self.scan_identifier();
+        // == operator (must check before lone =)
+        if current_char == '=' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::EqualEqual));
         }
 
-        // Error recovery: advance past the invalid character to avoid infinite loop
+        // != operator
+        if current_char == '!' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::BangEqual));
+        }
+
+        // Reject lone = with helpful error
+        if current_char == '=' {
+            self.advance();
+            return Err(self.error("Assignment not allowed in interpolation - did you mean '=='?"));
+        }
+
+        // Reject lone ! with helpful error
+        if current_char == '!' {
+            self.advance();
+            return Err(self.error("Expected '!=' for inequality"));
+        }
+
+        // String literal
+        if current_char == '"' {
+            return self.scan_string();
+        }
+
+        // Number literal (including negative)
+        if current_char.is_ascii_digit()
+            || (current_char == '-' && self.peek_next().is_some_and(|n| n.is_ascii_digit()))
+        {
+            return self.scan_number();
+        }
+
+        // Identifier or keyword (true/false)
+        if current_char.is_ascii_alphabetic() || current_char == '_' {
+            return self.scan_identifier_or_keyword();
+        }
+
+        // Error recovery
         self.advance();
         Err(self.error("Invalid character in interpolation"))
     }
@@ -563,5 +601,100 @@ impl<'a> Scanner<'a> {
                 end: self.current,
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn scan_tokens(source: &str) -> Vec<Token<'_>> {
+        Scanner::new(source)
+            .tokens()
+            .filter_map(|r| r.ok())
+            .collect()
+    }
+
+    fn token_kinds(source: &str) -> Vec<TokenKind> {
+        scan_tokens(source).into_iter().map(|t| t.kind).collect()
+    }
+
+    // === Equality Operator Tests ===
+
+    #[test]
+    fn equality_operator_in_interpolation() {
+        let kinds = token_kinds("{x == y}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+    }
+
+    #[test]
+    fn inequality_operator_in_interpolation() {
+        let kinds = token_kinds("{x != y}");
+        assert!(kinds.contains(&TokenKind::BangEqual));
+    }
+
+    #[test]
+    fn equality_with_string_literal() {
+        let kinds = token_kinds("{x == \"hello\"}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+        assert!(kinds.contains(&TokenKind::String));
+    }
+
+    #[test]
+    fn equality_with_number_literal() {
+        let kinds = token_kinds("{x == 42}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+        assert!(kinds.contains(&TokenKind::Number));
+    }
+
+    #[test]
+    fn equality_with_negative_number() {
+        let kinds = token_kinds("{x == -5}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+        assert!(kinds.contains(&TokenKind::Number));
+    }
+
+    #[test]
+    fn equality_with_boolean_true() {
+        let kinds = token_kinds("{x == true}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+        assert!(kinds.contains(&TokenKind::True));
+    }
+
+    #[test]
+    fn equality_with_boolean_false() {
+        let kinds = token_kinds("{x == false}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+        assert!(kinds.contains(&TokenKind::False));
+    }
+
+    // === Error Case Tests ===
+
+    #[test]
+    fn lone_equals_produces_error() {
+        let results: Vec<_> = Scanner::new("{x = y}").tokens().collect();
+        let has_error = results.iter().any(|r| r.is_err());
+        assert!(has_error, "Expected error for lone = in interpolation");
+    }
+
+    #[test]
+    fn lone_bang_produces_error() {
+        let results: Vec<_> = Scanner::new("{x ! y}").tokens().collect();
+        let has_error = results.iter().any(|r| r.is_err());
+        assert!(has_error, "Expected error for lone ! in interpolation");
+    }
+
+    // === Edge Case Tests ===
+
+    #[test]
+    fn no_spaces_around_operator() {
+        let kinds = token_kinds("{x==y}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
+    }
+
+    #[test]
+    fn multiple_spaces_around_operator() {
+        let kinds = token_kinds("{x  ==  y}");
+        assert!(kinds.contains(&TokenKind::EqualEqual));
     }
 }

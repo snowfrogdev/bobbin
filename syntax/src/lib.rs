@@ -16,13 +16,16 @@ pub mod resolver;
 pub mod scanner;
 pub mod token;
 
-pub use ast::{Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
+pub use ast::{
+    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart,
+    VarBindingData,
+};
 pub use diagnostic::{
     AriadneRenderer, Diagnostic, DiagnosticContext, IntoDiagnostic, JaroWinklerMatcher, Label,
     LabelStyle, LineIndex, Matcher, Renderer, Severity, SourcePosition, Suggestion,
 };
 pub use parser::{ParseError, Parser};
-pub use resolver::{Resolver, SemanticError, SymbolTable, VariableDeclaration, VariableKind};
+pub use resolver::{Resolver, SemanticError, SymbolTable, ValueType, VariableDeclaration, VariableKind};
 pub use scanner::{LexicalError, Scanner};
 pub use token::{BOOLEAN_LITERALS, KEYWORDS, Span, Token, TokenKind};
 

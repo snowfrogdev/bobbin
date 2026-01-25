@@ -233,6 +233,17 @@ impl VM {
                     Some(value) => self.stack.push(value),
                     None => return Err(RuntimeError::MissingExternVariable { name }),
                 },
+                Instruction::Equal | Instruction::NotEqual => {
+                    let b = self.stack.pop().expect("stack underflow: compiler bug");
+                    let a = self.stack.pop().expect("stack underflow: compiler bug");
+                    let equal = a == b;
+                    let result = match instruction {
+                        Instruction::Equal => equal,
+                        Instruction::NotEqual => !equal,
+                        _ => unreachable!(),
+                    };
+                    self.stack.push(Value::Bool(result));
+                }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK
                     return Ok(StepResult::Done);

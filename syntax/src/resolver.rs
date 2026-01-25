@@ -1,8 +1,36 @@
 use std::collections::HashMap;
 
-use crate::ast::{Choice, ExternDeclData, NodeId, Script, Stmt, TextPart, VarBindingData};
+use crate::ast::{Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::token::Span;
+
+/// The type of a variable's value, inferred from its initializer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueType {
+    Number,
+    String,
+    Bool,
+}
+
+impl ValueType {
+    /// Extract the type from a literal value.
+    pub fn from_literal(lit: &Literal) -> Self {
+        match lit {
+            Literal::Number(_) => ValueType::Number,
+            Literal::String(_) => ValueType::String,
+            Literal::Bool(_) => ValueType::Bool,
+        }
+    }
+
+    /// Human-readable type name for error messages.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ValueType::Number => "number",
+            ValueType::String => "string",
+            ValueType::Bool => "bool",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum SemanticError {
@@ -17,6 +45,13 @@ pub enum SemanticError {
     },
     AssignmentToExtern {
         name: String,
+        span: Span,
+    },
+    TypeMismatch {
+        left_name: String,
+        left_type: ValueType,
+        right_desc: String,
+        right_type: ValueType,
         span: Span,
     },
 }
@@ -62,6 +97,23 @@ impl IntoDiagnostic for SemanticError {
                 "Extern variables are provided by the host game and cannot be modified by scripts",
             )
             .with_note("Use 'save' or 'temp' to declare a mutable variable instead"),
+            SemanticError::TypeMismatch {
+                left_name,
+                left_type,
+                right_desc,
+                right_type,
+                span,
+            } => Diagnostic::error(
+                format!(
+                    "type mismatch in comparison: {} ({}) vs {} ({})",
+                    left_name,
+                    left_type.name(),
+                    right_desc,
+                    right_type.name()
+                ),
+                span,
+                format!("cannot compare {} to {}", left_type.name(), right_type.name()),
+            ),
         }
     }
 }
@@ -100,13 +152,15 @@ pub struct SymbolTable {
 #[derive(Debug)]
 struct VarInfo {
     slot: usize,
-    span: Span, // for error messages
+    span: Span,
+    value_type: ValueType,
 }
 
 /// Information about a declared save variable
 #[derive(Debug)]
 struct SaveVarInfo {
-    span: Span, // for error messages (no slot - uses external storage)
+    span: Span,
+    value_type: ValueType,
 }
 
 /// Information about a declared extern variable
@@ -220,11 +274,13 @@ impl<'a> Resolver<'a> {
 
     fn resolve_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::TempDecl(VarBindingData { id, name, span, .. }) => {
-                self.declare_temp(*id, name, *span);
+            Stmt::TempDecl(VarBindingData { id, name, value, span }) => {
+                let value_type = ValueType::from_literal(value);
+                self.declare_temp(*id, name, *span, value_type);
             }
-            Stmt::SaveDecl(VarBindingData { id, name, span, .. }) => {
-                self.declare_save(*id, name, *span);
+            Stmt::SaveDecl(VarBindingData { id, name, value, span }) => {
+                let value_type = ValueType::from_literal(value);
+                self.declare_save(*id, name, *span, value_type);
             }
             Stmt::ExternDecl(ExternDeclData { id, name, span }) => {
                 self.declare_extern(*id, name, *span);
@@ -258,9 +314,75 @@ impl<'a> Resolver<'a> {
 
     fn resolve_text_parts(&mut self, parts: &[TextPart]) {
         for part in parts {
-            if let TextPart::VarRef { id, name, span } = part {
-                self.resolve_reference(*id, name, *span, false); // for_write = false
+            match part {
+                TextPart::Literal { .. } => {
+                    // Literal text has no variables to resolve
+                }
+                TextPart::Expr { expr, .. } => {
+                    self.resolve_expr(expr);
+                }
             }
+        }
+    }
+
+    /// Resolve variable references within an expression.
+    fn resolve_expr(&mut self, expr: &crate::ast::Expr) {
+        use crate::ast::Expr;
+        match expr {
+            Expr::Literal { .. } => {
+                // Literals have no variables to resolve
+            }
+            Expr::VarRef { id, name, span } => {
+                self.resolve_reference(*id, name, *span, false);
+            }
+            Expr::Binary { left, right, span, .. } => {
+                self.resolve_expr(left);
+                self.resolve_expr(right);
+                self.check_expr_types(left, right, *span);
+            }
+        }
+    }
+
+    /// Get the type of an expression (for type checking).
+    fn expr_type(&self, expr: &crate::ast::Expr) -> Option<ValueType> {
+        use crate::ast::Expr;
+        match expr {
+            Expr::Literal { value, .. } => Some(ValueType::from_literal(value)),
+            Expr::VarRef { name, .. } => self.lookup_type(name),
+            Expr::Binary { .. } => Some(ValueType::Bool), // Comparisons always return bool
+        }
+    }
+
+    /// Check that both operands of an expression comparison have compatible types.
+    fn check_expr_types(&mut self, left: &crate::ast::Expr, right: &crate::ast::Expr, span: Span) {
+        let left_type = match self.expr_type(left) {
+            Some(t) => t,
+            None => return, // Extern or undefined - skip type checking
+        };
+
+        let right_type = match self.expr_type(right) {
+            Some(t) => t,
+            None => return, // Extern or undefined - skip type checking
+        };
+
+        if left_type != right_type {
+            self.errors.push(SemanticError::TypeMismatch {
+                left_name: self.describe_expr(left),
+                left_type,
+                right_desc: self.describe_expr(right),
+                right_type,
+                span,
+            });
+        }
+    }
+
+    /// Describe an expression for error messages.
+    fn describe_expr(&self, expr: &crate::ast::Expr) -> String {
+        use crate::ast::Expr;
+        match expr {
+            Expr::Literal { value, .. } => format!("literal {:?}", value),
+            Expr::VarRef { name, .. } => name.clone(),
+            Expr::Binary { .. } => "comparison".to_string(),
         }
     }
 
@@ -306,7 +428,7 @@ impl<'a> Resolver<'a> {
     }
 
     /// Declare a temp variable in the current (innermost) scope
-    fn declare_temp(&mut self, id: NodeId, name: &str, span: Span) {
+    fn declare_temp(&mut self, id: NodeId, name: &str, span: Span, value_type: ValueType) {
         // Check for conflict with save/extern variables (file-global)
         if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
@@ -345,7 +467,7 @@ impl<'a> Resolver<'a> {
         // Record in current scope
         current_scope
             .variables
-            .insert(name.to_string(), VarInfo { slot, span });
+            .insert(name.to_string(), VarInfo { slot, span, value_type });
 
         // Record binding for this declaration
         self.bindings.insert(id, slot);
@@ -359,7 +481,7 @@ impl<'a> Resolver<'a> {
     }
 
     /// Declare a save variable (file-global, uses external storage)
-    fn declare_save(&mut self, id: NodeId, name: &str, span: Span) {
+    fn declare_save(&mut self, id: NodeId, name: &str, span: Span, value_type: ValueType) {
         // Check for conflict with save/extern variables (file-global)
         if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
@@ -382,7 +504,7 @@ impl<'a> Resolver<'a> {
 
         // Register the save variable (file-global)
         self.save_vars
-            .insert(name.to_string(), SaveVarInfo { span });
+            .insert(name.to_string(), SaveVarInfo { span, value_type });
 
         // Record binding for this declaration
         self.save_bindings.insert(id, name.to_string());
@@ -467,4 +589,25 @@ impl<'a> Resolver<'a> {
             span,
         });
     }
+
+    /// Look up the type of a declared variable.
+    /// Returns None for extern variables (unknown type) or undefined variables.
+    fn lookup_type(&self, name: &str) -> Option<ValueType> {
+        // Check temp scopes (innermost to outermost)
+        for scope in self.scopes.iter().rev() {
+            if let Some(var_info) = scope.variables.get(name) {
+                return Some(var_info.value_type);
+            }
+        }
+
+        // Check save variables
+        if let Some(save_info) = self.save_vars.get(name) {
+            return Some(save_info.value_type);
+        }
+
+        // Extern variables have no compile-time type
+        // Undefined variables also return None (error already reported by resolve_reference)
+        None
+    }
+
 }

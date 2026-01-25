@@ -1,0 +1,3 @@
+temp greeting = "hello"
+Is hello: {"hello" == greeting}
+Is bye: {"bye" == greeting}

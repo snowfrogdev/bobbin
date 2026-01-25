@@ -1,0 +1,3 @@
+temp a = "hello"
+temp b = "hello"
+{a != b}

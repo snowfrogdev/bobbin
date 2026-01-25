@@ -1,0 +1,4 @@
+Same: {10 == 10}
+Different: {10 == 20}
+Zero: {0 == 0}
+Negative: {-5 == -5}

@@ -1,0 +1,2 @@
+temp str = "hello"
+{42 == str}

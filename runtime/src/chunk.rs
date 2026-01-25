@@ -43,6 +43,10 @@ pub enum Instruction {
     GetHost {
         name: String,
     },
+    /// Pop two values, push true if equal, false otherwise.
+    Equal,
+    /// Pop two values, push true if not equal, false otherwise.
+    NotEqual,
     Return,
 }
 
