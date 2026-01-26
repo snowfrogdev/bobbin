@@ -1,0 +1,3 @@
+temp a = "Hello\nWorld"
+temp b = "Hello\nWorld"
+{a == b}

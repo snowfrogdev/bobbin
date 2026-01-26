@@ -213,6 +213,30 @@ fn types_empty_string() {
 }
 
 // =============================================================================
+// String Escape Sequences
+// =============================================================================
+
+#[test]
+fn string_escape_newline() {
+    support::run_output_test(&support::cases_dir().join("variables/string_escape_newline.bobbin"));
+}
+
+#[test]
+fn string_escape_tab() {
+    support::run_output_test(&support::cases_dir().join("variables/string_escape_tab.bobbin"));
+}
+
+#[test]
+fn string_escape_quote() {
+    support::run_output_test(&support::cases_dir().join("variables/string_escape_quote.bobbin"));
+}
+
+#[test]
+fn string_escape_backslash() {
+    support::run_output_test(&support::cases_dir().join("variables/string_escape_backslash.bobbin"));
+}
+
+// =============================================================================
 // Variables in Choices
 // =============================================================================
 

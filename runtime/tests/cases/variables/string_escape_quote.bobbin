@@ -1,0 +1,2 @@
+temp msg = "He said \"Hello\""
+{msg}
