@@ -24,10 +24,10 @@ else_clause   = ELSE , NEWLINE , INDENT , statement , { statement } , DEDENT ;
 ## Lexical Grammar
 
 ```ebnf
-SAVE    = "save" , identifier , "=" , literal ;
-TEMP    = "temp" , identifier , "=" , literal ;
+SAVE    = "save" , identifier , "=" , expression ;
+TEMP    = "temp" , identifier , "=" , expression ;
 EXTERN  = "extern" , identifier ;
-SET     = "set" , identifier , "=" , literal ;
+SET     = "set" , identifier , "=" , expression ;
 IF      = "if" , expression ;            (* condition must evaluate to boolean *)
 ELSEIF  = "elseif" , expression ;        (* condition must evaluate to boolean *)
 ELSE    = "else" ;
@@ -86,10 +86,26 @@ String literals support these escape sequences:
 
 - `save` declares a persistent dialogue global (survives save/load)
 - `temp` declares a temporary variable (exists only during execution)
-- Both require an initial value
-- Type is inferred from the initial value
+- Both require an initial expression (can be a literal or computed value)
+- Type is inferred from the initial expression's result type
+- Expressions can reference previously declared variables: `temp y = x + 5`
+- Forward references are not allowed: `temp x = y` fails if `y` isn't declared yet
 - See ADR-0002 for the state management architecture
 - See ADR-0004 for the type system and storage architecture
+
+#### Save Variable Expression Semantics
+
+Save variables with expressions are initialized **once** at first run:
+
+```bobbin
+save health = base_health + bonus  // Evaluated on first run only
+```
+
+On subsequent loads, the variable value is restored from save storage,
+and the initializer expression is NOT re-evaluated.
+
+Extern variables in initializers are evaluated at initialization time.
+If extern state changes between save and load, the saved value takes precedence.
 
 ### Host Variable Declarations (`extern`)
 
@@ -104,8 +120,10 @@ String literals support these escape sequences:
 
 ### Assignments
 
-- `set` modifies an existing variable
+- `set` modifies an existing variable with an expression
 - The variable must be declared with `save` or `temp`
+- Expressions can reference other variables: `set health = health - damage`
+- Self-referential assignments are allowed: `set counter = counter + 1`
 - Assigning to `extern` variables is a semantic error (they are read-only)
 - See ADR-0003 for the syntax decision rationale
 

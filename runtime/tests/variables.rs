@@ -46,6 +46,50 @@ fn assignment_types() {
 }
 
 // =============================================================================
+// Assignment with Expressions
+// =============================================================================
+
+#[test]
+fn assignment_arithmetic_temp() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_arithmetic_temp.bobbin"));
+}
+
+#[test]
+fn assignment_arithmetic_save() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_arithmetic_save.bobbin"));
+}
+
+#[test]
+fn assignment_arithmetic_set() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_arithmetic_set.bobbin"));
+}
+
+#[test]
+fn assignment_comparison_result() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_comparison_result.bobbin"));
+}
+
+#[test]
+fn assignment_logical_result() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_logical_result.bobbin"));
+}
+
+#[test]
+fn assignment_variable_ref() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_variable_ref.bobbin"));
+}
+
+#[test]
+fn assignment_complex_nested() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_complex_nested.bobbin"));
+}
+
+#[test]
+fn assignment_precedence() {
+    support::run_output_test(&support::cases_dir().join("variables/assignment_precedence.bobbin"));
+}
+
+// =============================================================================
 // Save Variables
 // =============================================================================
 
@@ -428,4 +472,23 @@ fn errors_save_shadows_extern() {
 #[test]
 fn errors_extern_undefined() {
     support::run_error_test(&support::cases_dir().join("variables/errors/extern_undefined.bobbin"));
+}
+
+// =============================================================================
+// Assignment Expression Errors
+// =============================================================================
+
+#[test]
+fn errors_assignment_forward_ref() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/assignment_forward_ref.bobbin"));
+}
+
+#[test]
+fn errors_assignment_type_mismatch() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/assignment_type_mismatch.bobbin"));
+}
+
+#[test]
+fn errors_assignment_undefined_var() {
+    support::run_error_test(&support::cases_dir().join("variables/errors/assignment_undefined_var.bobbin"));
 }

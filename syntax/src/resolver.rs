@@ -386,19 +386,31 @@ impl<'a> Resolver<'a> {
 
     fn resolve_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::TempDecl(VarBindingData { id, name, value, span }) => {
-                let value_type = ValueType::from_literal(value);
+            Stmt::TempDecl(VarBindingData { id, name, init_expr, span }) => {
+                // 1. Resolve the RHS expression FIRST (validates all variable refs exist)
+                // This ensures forward references like `temp x = y` fail when y isn't declared
+                self.resolve_expr(init_expr);
+                // 2. Infer type from expression result
+                let value_type = self.expr_type(init_expr).unwrap_or(ValueType::Number);
+                // 3. THEN declare the variable (so it can't reference itself in init)
                 self.declare_temp(*id, name, *span, value_type);
             }
-            Stmt::SaveDecl(VarBindingData { id, name, value, span }) => {
-                let value_type = ValueType::from_literal(value);
+            Stmt::SaveDecl(VarBindingData { id, name, init_expr, span }) => {
+                // 1. Resolve the RHS expression FIRST
+                self.resolve_expr(init_expr);
+                // 2. Infer type from expression result
+                let value_type = self.expr_type(init_expr).unwrap_or(ValueType::Number);
+                // 3. THEN declare the variable
                 self.declare_save(*id, name, *span, value_type);
             }
             Stmt::ExternDecl(ExternDeclData { id, name, span }) => {
                 self.declare_extern(*id, name, *span);
             }
-            Stmt::Assignment(VarBindingData { id, name, span, .. }) => {
-                self.resolve_reference(*id, name, *span, true); // for_write = true
+            Stmt::Assignment(VarBindingData { id, name, init_expr, span }) => {
+                // 1. Resolve the RHS expression FIRST
+                self.resolve_expr(init_expr);
+                // 2. Then resolve the target variable (for_write = true to check extern)
+                self.resolve_reference(*id, name, *span, true);
             }
             Stmt::Line { parts, .. } => {
                 self.resolve_text_parts(parts);

@@ -1,0 +1,2 @@
+temp x = 2 + 3 * 4
+Result: {x}

@@ -1,0 +1,3 @@
+temp x = 10
+temp y = x + 5
+Result: {y}

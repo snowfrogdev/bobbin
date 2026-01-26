@@ -1,0 +1,6 @@
+temp a = true
+temp b = false
+temp and_result = a and b
+temp or_result = a or b
+AND: {and_result}
+OR: {or_result}

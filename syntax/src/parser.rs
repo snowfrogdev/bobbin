@@ -189,54 +189,6 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         Stmt::Assignment(data)
     }
 
-    /// Parse a literal value (string, number, or boolean)
-    fn parse_literal(&mut self) -> (Literal, usize) {
-        match self.tokens.peek() {
-            Some(Ok(t)) => match t.kind {
-                TokenKind::String => {
-                    let token = self.advance();
-                    // Remove quotes from the lexeme
-                    let s = token.lexeme;
-                    let unquoted = if s.len() >= 2 {
-                        // Handle escape sequences
-                        unescape_string(&s[1..s.len() - 1])
-                    } else {
-                        String::new()
-                    };
-                    (Literal::String(unquoted), token.span.end)
-                }
-                TokenKind::Number => {
-                    let token = self.advance();
-                    let num: f64 = token.lexeme.parse().unwrap_or(0.0);
-                    (Literal::Number(num), token.span.end)
-                }
-                TokenKind::True => {
-                    let token = self.advance();
-                    (Literal::Bool(true), token.span.end)
-                }
-                TokenKind::False => {
-                    let token = self.advance();
-                    (Literal::Bool(false), token.span.end)
-                }
-                _ => {
-                    let span = t.span;
-                    self.errors.push(ParseError::Syntax {
-                        message: "Expected literal value".to_string(),
-                        span,
-                    });
-                    (Literal::Bool(false), span.end)
-                }
-            },
-            _ => {
-                self.errors.push(ParseError::Syntax {
-                    message: "Expected literal value".to_string(),
-                    span: Span { start: 0, end: 0 },
-                });
-                (Literal::Bool(false), 0)
-            }
-        }
-    }
-
     /// Parse an expression inside interpolation braces using precedence-climbing.
     /// Entry point for expression parsing. Returns the expression and its span.
     fn parse_interpolation_expr(&mut self, start: usize) -> Option<(Expr, Span)> {
@@ -608,8 +560,8 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         }
     }
 
-    /// Parse a variable binding: identifier = literal
-    /// Used by both temp declarations and assignments.
+    /// Parse a variable binding: identifier = expression
+    /// Used by temp declarations, save declarations, and assignments.
     /// The keyword token should already be consumed.
     fn parse_var_binding(&mut self, keyword: &str, start: usize) -> VarBindingData {
         let id = self.next_id();
@@ -628,7 +580,10 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             return VarBindingData {
                 id,
                 name: String::new(),
-                value: Literal::Bool(false),
+                init_expr: Expr::Literal {
+                    value: Literal::Bool(false),
+                    span: Span { start, end: start },
+                },
                 span: Span { start, end: start },
             };
         };
@@ -646,18 +601,37 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             return VarBindingData {
                 id,
                 name,
-                value: Literal::Bool(false),
+                init_expr: Expr::Literal {
+                    value: Literal::Bool(false),
+                    span: Span { start, end: start },
+                },
                 span: Span { start, end: start },
             };
         }
 
-        // Parse literal value
-        let (value, end) = self.parse_literal();
+        // Parse expression value
+        let (init_expr, end) = match self.parse_logical_or() {
+            Some((expr, end)) => (expr, end),
+            None => {
+                let span = self.current_span();
+                self.errors.push(ParseError::Syntax {
+                    message: format!("Expected expression after '=' in {} statement", keyword),
+                    span,
+                });
+                (
+                    Expr::Literal {
+                        value: Literal::Bool(false),
+                        span: Span { start, end: start },
+                    },
+                    start,
+                )
+            }
+        };
 
         VarBindingData {
             id,
             name,
-            value,
+            init_expr,
             span: Span { start, end },
         }
     }
@@ -1340,5 +1314,77 @@ mod tests {
     fn parse_error_missing_right_operand_add() {
         let result = parse_source("{x +}");
         assert!(result.is_err());
+    }
+}
+
+#[cfg(test)]
+mod choice_else_tests {
+    use super::*;
+    use crate::scanner::Scanner;
+
+    #[test]
+    fn test_choice_in_if_with_else() {
+        let source = r#"temp condition = true
+if condition
+    - Choice A
+        Action A
+    - Choice B
+        Action B
+else
+    Alternative."#;
+
+        let scanner = Scanner::new(source);
+        let parser = Parser::new(scanner.tokens());
+        let result = parser.parse();
+
+        match result {
+            Ok(script) => {
+                println!("Parse successful! Statements: {:#?}", script.statements);
+                // Should have 2 statements: temp declaration and if statement
+                assert_eq!(script.statements.len(), 2);
+            }
+            Err(errors) => {
+                for e in &errors {
+                    println!("Parse error: {:?}", e);
+                }
+                panic!("Expected parse to succeed but got {} errors", errors.len());
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod token_debug_tests {
+    use crate::scanner::Scanner;
+    use crate::token::TokenKind;
+
+    #[test]
+    fn debug_token_stream() {
+        let source = r#"temp condition = true
+if condition
+    - Choice A
+        Action A
+    - Choice B
+        Action B
+else
+    Alternative."#;
+
+        println!("\n=== TOKEN STREAM ===");
+        let scanner = Scanner::new(source);
+        for (i, tok) in scanner.tokens().enumerate() {
+            match tok {
+                Ok(t) => {
+                    let lexeme_display = if t.lexeme.contains('\n') {
+                        "\n".to_string()
+                    } else if t.lexeme.is_empty() {
+                        "<empty>".to_string()
+                    } else {
+                        format!("{:?}", t.lexeme)
+                    };
+                    println!("{:3}: {:15?} {}", i, t.kind, lexeme_display);
+                }
+                Err(e) => println!("{:3}: ERROR {:?}", i, e),
+            }
+        }
     }
 }

@@ -90,17 +90,17 @@ impl<'a> Compiler<'a> {
 
     fn compile_stmt(&mut self, stmt: &Stmt) {
         match stmt {
-            Stmt::TempDecl(VarBindingData { value, span, .. }) => {
-                // Push initial value onto stack.
+            Stmt::TempDecl(VarBindingData { init_expr, .. }) => {
+                // Compile initial expression onto stack.
                 // The value lives at its assigned slot position (implicit from declaration order).
-                self.compile_literal(value, span.start);
+                self.compile_expr(init_expr);
             }
             Stmt::SaveDecl(VarBindingData {
-                name, value, span, ..
+                name, init_expr, span, ..
             }) => {
-                // Push initial value onto stack, then emit InitStorage.
+                // Compile initial expression onto stack, then emit InitStorage.
                 // InitStorage uses "initialize if absent" semantics for save variables.
-                self.compile_literal(value, span.start);
+                self.compile_expr(init_expr);
                 self.chunk
                     .emit(Instruction::InitStorage { name: name.clone() }, span.start);
             }
@@ -109,11 +109,11 @@ impl<'a> Compiler<'a> {
                 // The host provides values on-demand when GetHost executes.
             }
             Stmt::Assignment(VarBindingData {
-                id, value, span, ..
+                id, init_expr, span, ..
             }) => {
                 // Assignment modifies an existing variable (temp or save).
-                // Push value, then emit appropriate write instruction.
-                self.compile_literal(value, span.start);
+                // Compile expression, then emit appropriate write instruction.
+                self.compile_expr(init_expr);
                 self.emit_var_write(*id, span.start);
             }
             Stmt::Line { parts, span } => {

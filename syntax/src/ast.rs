@@ -134,7 +134,9 @@ impl Expr {
 pub struct VarBindingData {
     pub id: NodeId,
     pub name: String,
-    pub value: Literal,
+    /// The initialization expression. Supports arithmetic, logical, and comparison
+    /// operators, enabling expressions like `temp x = a + b` and `set health = health - damage`.
+    pub init_expr: Expr,
     pub span: Span,
 }
 

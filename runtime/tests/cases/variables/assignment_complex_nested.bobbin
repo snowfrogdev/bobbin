@@ -1,0 +1,5 @@
+temp a = 5
+temp b = 3
+temp c = 2
+temp z = (a + b) * c
+Result: {z}

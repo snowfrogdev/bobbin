@@ -35,7 +35,8 @@ enum ScanMode {
     Indentation,
     /// After indentation handled, check for keywords or text
     LineStart,
-    /// After a keyword (temp/save/set), expect: identifier = literal
+    /// After a keyword (temp/save/set), expect: identifier =
+    /// After `=`, transitions to Condition mode to scan the expression.
     Declaration,
     /// After extern keyword, expect: identifier only (no initializer)
     ExternDeclaration,
@@ -205,7 +206,8 @@ impl<'a> Scanner<'a> {
         Some(token)
     }
 
-    /// Scan declaration content: identifier = literal
+    /// Scan declaration content: identifier = expression
+    /// After the `=` sign, transitions to Condition mode to scan the expression.
     fn scan_declaration_content(&mut self) -> Result<Token<'a>, LexicalError> {
         self.skip_spaces();
         self.start = self.current;
@@ -216,26 +218,18 @@ impl<'a> Scanner<'a> {
 
         let c = self.peek().unwrap();
 
-        // Equals
+        // Equals - after this, transition to Condition mode for expression scanning
         if c == '=' {
             self.advance();
+            // Switch to Condition mode which handles all expression tokens
+            // and transitions back to LineStart on newline
+            self.mode = ScanMode::Condition;
             return Ok(self.make_token(TokenKind::Equals));
         }
 
-        // String literal
-        if c == '"' {
-            return self.scan_string();
-        }
-
-        // Number literal (including negative)
-        if c.is_ascii_digit() || (c == '-' && self.peek_next().is_some_and(|n| n.is_ascii_digit()))
-        {
-            return self.scan_number();
-        }
-
-        // Identifier or keyword (true/false)
+        // Identifier (variable name before the =)
         if c.is_ascii_alphabetic() || c == '_' {
-            return self.scan_identifier_or_keyword();
+            return self.scan_identifier();
         }
 
         // Error recovery: advance past the invalid character to avoid infinite loop
@@ -676,6 +670,10 @@ impl<'a> Scanner<'a> {
         if self.pending_dedents > 0 {
             self.pending_dedents -= 1;
             self.start = self.current;
+            // Transition to LineStart when all dedents are emitted
+            if self.pending_dedents == 0 {
+                self.mode = ScanMode::LineStart;
+            }
             return Ok(Some(self.make_token(TokenKind::Dedent)));
         }
 
@@ -697,12 +695,12 @@ impl<'a> Scanner<'a> {
         };
 
         let current_indent = self.indent_stack.last().copied().unwrap_or(0);
-        self.mode = ScanMode::LineStart;
         self.start = self.current;
 
         if spaces > current_indent {
             // Indent: push new level
             self.indent_stack.push(spaces);
+            self.mode = ScanMode::LineStart;
             Ok(Some(self.make_token(TokenKind::Indent)))
         } else if spaces < current_indent {
             // Dedent: pop until we find matching level
@@ -718,9 +716,14 @@ impl<'a> Scanner<'a> {
                 return Err(self.error("Inconsistent indentation"));
             }
             self.pending_dedents -= 1; // We emit one now
+            // Only transition to LineStart when all dedents are emitted
+            if self.pending_dedents == 0 {
+                self.mode = ScanMode::LineStart;
+            }
             Ok(Some(self.make_token(TokenKind::Dedent)))
         } else {
             // Same level - no token
+            self.mode = ScanMode::LineStart;
             Ok(None)
         }
     }
