@@ -241,6 +241,23 @@ impl VM {
                 Instruction::Jump { target } => {
                     self.ip = target;
                 }
+                Instruction::JumpIfFalse { target } => {
+                    let value = self.stack.pop().expect("stack underflow: compiler bug");
+                    match value {
+                        Value::Bool(false) => {
+                            self.ip = target; // Absolute target, not relative offset
+                        }
+                        Value::Bool(true) => {
+                            // Condition true - continue to next instruction (no jump)
+                        }
+                        _ => {
+                            return Err(RuntimeError::TypeMismatch {
+                                expected: "bool",
+                                got: value.type_name(),
+                            });
+                        }
+                    }
+                }
                 Instruction::InitStorage { name } => {
                     let value = self.stack.pop().expect("stack underflow: compiler bug");
                     self.storage.initialize_if_absent(&name, value);

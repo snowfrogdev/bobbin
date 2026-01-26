@@ -1,0 +1,23 @@
+# Test if statement inside choice
+
+--- path: select_a
+> Make a choice:
+[advance]
+! waiting_for_choice
+? Option A | Option B
+[choice 0]
+> You got a bonus!
+[advance]
+> Result A.
+[advance]
+! done
+
+--- path: select_b
+> Make a choice:
+[advance]
+! waiting_for_choice
+? Option A | Option B
+[choice 1]
+> Result B.
+[advance]
+! done

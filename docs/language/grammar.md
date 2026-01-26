@@ -3,15 +3,22 @@
 ## Syntax Grammar
 
 ```ebnf
-script      = { statement } ;
-statement   = save_decl | temp_decl | extern_decl | assignment | line | choice_set ;
-save_decl   = SAVE , NEWLINE ;
-temp_decl   = TEMP , NEWLINE ;
-extern_decl = EXTERN , NEWLINE ;
-assignment  = SET , NEWLINE ;
-line        = LINE , NEWLINE ;
-choice_set  = choice , { choice } ;
-choice      = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
+script        = { statement } ;
+statement     = save_decl | temp_decl | extern_decl | assignment
+              | line | choice_set | if_stmt ;
+save_decl     = SAVE , NEWLINE ;
+temp_decl     = TEMP , NEWLINE ;
+extern_decl   = EXTERN , NEWLINE ;
+assignment    = SET , NEWLINE ;
+line          = LINE , NEWLINE ;
+choice_set    = choice , { choice } ;
+choice        = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
+
+if_stmt       = IF , NEWLINE , INDENT , statement , { statement } , DEDENT ,
+                { elseif_clause } ,
+                [ else_clause ] ;
+elseif_clause = ELSEIF , NEWLINE , INDENT , statement , { statement } , DEDENT ;
+else_clause   = ELSE , NEWLINE , INDENT , statement , { statement } , DEDENT ;
 ```
 
 ## Lexical Grammar
@@ -21,7 +28,10 @@ SAVE    = "save" , identifier , "=" , literal ;
 TEMP    = "temp" , identifier , "=" , literal ;
 EXTERN  = "extern" , identifier ;
 SET     = "set" , identifier , "=" , literal ;
-LINE    = text ;                         (* line not starting with "- ", "save ", "temp ", "extern ", or "set " *)
+IF      = "if" , expression ;            (* condition must evaluate to boolean *)
+ELSEIF  = "elseif" , expression ;        (* condition must evaluate to boolean *)
+ELSE    = "else" ;
+LINE    = text ;                         (* line not starting with "- ", "save ", "temp ", "extern ", "set ", "if ", "elseif ", or "else" *)
 CHOICE  = "-" , text ;                   (* line starting with "- " *)
 NEWLINE = "\n" | "\r\n" | "\r" ;
 INDENT  = ? increase in indentation level ? ;
@@ -102,8 +112,49 @@ String literals support these escape sequences:
 ### Choices
 
 - Space required after `-` for choices (i.e., the `"-␣"` prefix)
-- A LINE is any line not starting with `"-␣"`, `"save "`, `"temp "`, `"extern "`, or `"set "`
+- A LINE is any line not starting with `"-␣"`, `"save "`, `"temp "`, `"extern "`, `"set "`, `"if "`, `"elseif "`, or `"else"`
 - A CHOICE is any line starting with `"-␣"`, with the text after the prefix as its content
+
+### Conditionals
+
+Bobbin supports conditional execution with `if`, `elseif`, and `else`:
+
+- `if <expression>` - executes block if expression evaluates to `true`
+- `elseif <expression>` - checked if all previous conditions were `false`
+- `else` - executes if all previous conditions were `false`
+- Blocks are indentation-delimited (same as choices)
+- Empty blocks are not allowed (must contain at least one statement)
+- Condition expressions must evaluate to boolean (type mismatch is a semantic error)
+- Conditionals can nest inside choices and vice versa
+
+Example:
+
+```bobbin
+temp health = 25
+
+if health < 10
+    You're dying!
+elseif health < 50
+    You're wounded.
+else
+    You're healthy!
+```
+
+Conditionals with choices:
+
+```bobbin
+save gold = 100
+
+if gold >= 50
+    You can afford items.
+    - Buy sword (50 gold)
+        set gold = 50
+        You bought a sword!
+    - Leave
+        Goodbye.
+else
+    You can't afford anything.
+```
 
 ### Indentation
 
@@ -168,7 +219,6 @@ String literals support these escape sequences:
 The following syntax elements are planned but not yet specified:
 
 - **Compound assignment operators**: `+=`, `-=`, `*=`, `/=`
-- **Conditionals**: `if`/`else` structure
 - **Tables**: Literal syntax, access syntax, methods
 - **Imports**: Module system syntax
 - **Commands**: Syntax for triggering game effects (giving items, playing sounds, etc.)

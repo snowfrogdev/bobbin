@@ -12,6 +12,9 @@ pub enum TokenKind {
     Save,
     Set,
     Extern,
+    If,     // if <expression>
+    Elseif, // elseif <expression>
+    Else,   // else
 
     // Logical operators (word-based)
     And, // and
@@ -60,8 +63,8 @@ pub struct Span {
     pub end: usize,
 }
 
-/// Language keywords for declarations and assignments.
-pub const KEYWORDS: &[&str] = &["save", "temp", "set", "extern"];
+/// Language keywords for declarations, assignments, and control flow.
+pub const KEYWORDS: &[&str] = &["save", "temp", "set", "extern", "if", "elseif", "else"];
 
 /// Boolean literal values.
 pub const BOOLEAN_LITERALS: &[&str] = &["true", "false"];

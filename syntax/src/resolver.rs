@@ -80,6 +80,12 @@ pub enum SemanticError {
         operand_type: ValueType,
         span: Span,
     },
+    /// Condition expression must evaluate to bool (for if/elseif)
+    ConditionNotBool {
+        context: &'static str, // "if" or "elseif"
+        got_type: ValueType,
+        span: Span,
+    },
 }
 
 impl IntoDiagnostic for SemanticError {
@@ -206,6 +212,20 @@ impl IntoDiagnostic for SemanticError {
                 format!("expected bool, got {}", operand_type.name()),
             )
             .with_note("Logical operators (and, or, not) only work with boolean values"),
+            SemanticError::ConditionNotBool {
+                context,
+                got_type,
+                span,
+            } => Diagnostic::error(
+                format!(
+                    "{} condition must be bool, got {}",
+                    context,
+                    got_type.name()
+                ),
+                span,
+                format!("expected bool, got {}", got_type.name()),
+            )
+            .with_note("Conditions must evaluate to true or false"),
         }
     }
 }
@@ -391,6 +411,61 @@ impl<'a> Resolver<'a> {
                 // Each choice branch gets its own scope
                 for choice in choices {
                     self.resolve_choice_branch(choice);
+                }
+            }
+            Stmt::If {
+                condition,
+                then_branch,
+                elseif_branches,
+                else_branch,
+                ..
+            } => {
+                // Resolve and type check condition
+                self.resolve_expr(condition);
+                if let Some(cond_type) = self.expr_type(condition) {
+                    if cond_type != ValueType::Bool {
+                        self.errors.push(SemanticError::ConditionNotBool {
+                            context: "if",
+                            got_type: cond_type,
+                            span: condition.span(),
+                        });
+                    }
+                }
+
+                // Resolve then branch (new scope for variables declared inside)
+                self.push_scope();
+                for stmt in then_branch {
+                    self.resolve_stmt(stmt);
+                }
+                self.pop_scope();
+
+                // Resolve elseif branches
+                for (elseif_cond, elseif_stmts) in elseif_branches {
+                    self.resolve_expr(elseif_cond);
+                    if let Some(elseif_type) = self.expr_type(elseif_cond) {
+                        if elseif_type != ValueType::Bool {
+                            self.errors.push(SemanticError::ConditionNotBool {
+                                context: "elseif",
+                                got_type: elseif_type,
+                                span: elseif_cond.span(),
+                            });
+                        }
+                    }
+
+                    self.push_scope();
+                    for stmt in elseif_stmts {
+                        self.resolve_stmt(stmt);
+                    }
+                    self.pop_scope();
+                }
+
+                // Resolve else branch
+                if let Some(else_stmts) = else_branch {
+                    self.push_scope();
+                    for stmt in else_stmts {
+                        self.resolve_stmt(stmt);
+                    }
+                    self.pop_scope();
                 }
             }
         }

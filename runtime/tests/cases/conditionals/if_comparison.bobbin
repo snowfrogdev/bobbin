@@ -1,0 +1,7 @@
+temp health = 25
+if health < 10
+    You're dying!
+elseif health < 50
+    You're wounded.
+else
+    You're healthy!

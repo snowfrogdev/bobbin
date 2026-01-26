@@ -1,0 +1,8 @@
+temp show_choices = true
+if show_choices
+    Pick one:
+    - First
+        You picked first.
+    - Second
+        You picked second.
+After the if.

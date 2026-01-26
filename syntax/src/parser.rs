@@ -82,6 +82,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                 TokenKind::Set => Some(self.assignment()),
                 TokenKind::TextSegment | TokenKind::OpenBrace => Some(self.line_statement()),
                 TokenKind::Choice => Some(self.choice_set()),
+                TokenKind::If => Some(self.if_statement()),
                 _ => None,
             },
             _ => None,
@@ -794,6 +795,171 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
             }
         }
         Stmt::ChoiceSet { choices }
+    }
+
+    /// Parse if statement: if expr NEWLINE INDENT stmts DEDENT [elseif...] [else...]
+    fn if_statement(&mut self) -> Stmt {
+        let start_token = self.advance(); // Consume 'if'
+        let start = start_token.span.start;
+        let id = self.next_id();
+
+        // Parse condition expression (reuse existing expression parsing)
+        let condition = match self.parse_logical_or() {
+            Some((expr, _)) => expr,
+            None => {
+                let span = self.current_span();
+                self.errors.push(ParseError::Syntax {
+                    message: "Expected condition expression after 'if'".to_string(),
+                    span,
+                });
+                self.synchronize();
+                return self.error_if_stmt(id, start);
+            }
+        };
+
+        // Expect NewLine, Indent, parse block
+        let then_branch = self.parse_indented_block("if");
+        if then_branch.is_empty() {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: "if block cannot be empty".to_string(),
+                span,
+            });
+        }
+
+        // Parse elseif branches
+        let mut elseif_branches = Vec::new();
+        while self.check(TokenKind::Elseif) {
+            self.advance(); // Consume 'elseif'
+            let elseif_cond = match self.parse_logical_or() {
+                Some((expr, _)) => expr,
+                None => {
+                    let span = self.current_span();
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected condition expression after 'elseif'".to_string(),
+                        span,
+                    });
+                    continue;
+                }
+            };
+            let elseif_stmts = self.parse_indented_block("elseif");
+            if elseif_stmts.is_empty() {
+                let span = self.current_span();
+                self.errors.push(ParseError::Syntax {
+                    message: "elseif block cannot be empty".to_string(),
+                    span,
+                });
+            }
+            elseif_branches.push((elseif_cond, elseif_stmts));
+        }
+
+        // Parse optional else branch
+        let else_branch = if self.check(TokenKind::Else) {
+            self.advance(); // Consume 'else'
+            let else_stmts = self.parse_indented_block("else");
+            if else_stmts.is_empty() {
+                let span = self.current_span();
+                self.errors.push(ParseError::Syntax {
+                    message: "else block cannot be empty".to_string(),
+                    span,
+                });
+            }
+            Some(else_stmts)
+        } else {
+            None
+        };
+
+        let end = self.current_span().end;
+        Stmt::If {
+            id,
+            condition,
+            then_branch,
+            elseif_branches,
+            else_branch,
+            span: Span { start, end },
+        }
+    }
+
+    /// Parse indented block: NEWLINE INDENT stmts DEDENT
+    /// Returns empty vec on error (caller should report appropriate error)
+    fn parse_indented_block(&mut self, context: &str) -> Vec<Stmt> {
+        // Skip NewLine tokens
+        while self.check(TokenKind::NewLine) {
+            self.advance();
+        }
+
+        // Expect Indent
+        if !self.check(TokenKind::Indent) {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: format!("Expected indented block after '{}'", context),
+                span,
+            });
+            return Vec::new();
+        }
+        self.advance(); // Consume Indent
+
+        // Parse statements until Dedent
+        let mut statements = Vec::new();
+        loop {
+            // Handle errors
+            if matches!(self.tokens.peek(), Some(Err(_))) {
+                if let Some(Err(e)) = self.tokens.next() {
+                    self.errors.push(e.into());
+                }
+                self.synchronize();
+                continue;
+            }
+
+            // Try to parse a statement
+            if let Some(stmt) = self.try_parse_statement() {
+                statements.push(stmt);
+                continue;
+            }
+
+            // Handle structural tokens
+            match self.tokens.peek() {
+                Some(Ok(t)) => match t.kind {
+                    TokenKind::NewLine => {
+                        self.advance();
+                    }
+                    TokenKind::Dedent => {
+                        self.advance();
+                        break;
+                    }
+                    TokenKind::Eof => break,
+                    // Elseif/Else at same indent level ends the block
+                    TokenKind::Elseif | TokenKind::Else => break,
+                    _ => {
+                        let span = t.span;
+                        self.errors.push(ParseError::Syntax {
+                            message: format!("Unexpected token in {} block", context),
+                            span,
+                        });
+                        self.advance();
+                    }
+                },
+                None => break,
+                Some(Err(_)) => unreachable!(),
+            }
+        }
+
+        statements
+    }
+
+    /// Create error placeholder for if statement
+    fn error_if_stmt(&self, id: NodeId, start: usize) -> Stmt {
+        Stmt::If {
+            id,
+            condition: Expr::Literal {
+                value: Literal::Bool(false),
+                span: Span { start, end: start },
+            },
+            then_branch: Vec::new(),
+            elseif_branches: Vec::new(),
+            else_branch: None,
+            span: Span { start, end: start },
+        }
     }
 
     /// Parse nested content under a choice (after Indent, before Dedent).

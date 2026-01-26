@@ -1,0 +1,6 @@
+temp is_brave = true
+temp has_sword = true
+if is_brave and has_sword
+    You charge into battle!
+else
+    You hesitate.

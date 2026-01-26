@@ -43,6 +43,8 @@ enum ScanMode {
     Text,
     /// Inside an interpolation {}, expect identifier
     Interpolation,
+    /// After if/elseif keyword, scan condition expression
+    Condition,
 }
 
 #[derive(Debug)]
@@ -108,6 +110,7 @@ impl<'a> Scanner<'a> {
             ScanMode::ExternDeclaration => self.scan_extern_declaration(),
             ScanMode::Text => self.scan_text_content(),
             ScanMode::Interpolation => self.scan_interpolation_content(),
+            ScanMode::Condition => self.scan_condition(),
         }
     }
 
@@ -129,6 +132,18 @@ impl<'a> Scanner<'a> {
             return Ok(tok);
         }
 
+        // Conditional keywords - transition to Condition mode to scan expression
+        if let Some(tok) = self.try_keyword("if", TokenKind::If, ScanMode::Condition) {
+            return Ok(tok);
+        }
+        if let Some(tok) = self.try_keyword("elseif", TokenKind::Elseif, ScanMode::Condition) {
+            return Ok(tok);
+        }
+        // "else" has no expression - just emit token and stay at LineStart for next line
+        if let Some(tok) = self.try_else_keyword() {
+            return Ok(tok);
+        }
+
         // Choice marker
         if let Some(tok) = self.try_keyword("-", TokenKind::Choice, ScanMode::Text) {
             return Ok(tok);
@@ -137,6 +152,30 @@ impl<'a> Scanner<'a> {
         // Otherwise it's text content
         self.mode = ScanMode::Text;
         self.scan_text_content()
+    }
+
+    /// Try to match "else" keyword (no expression follows).
+    /// "else" can be followed by newline, or be at end of line.
+    fn try_else_keyword(&mut self) -> Option<Token<'a>> {
+        let remaining = &self.source[self.current..];
+        if !remaining.starts_with("else") {
+            return None;
+        }
+        // Must be at end of content or followed by whitespace/newline
+        let after = &remaining[4..];
+        if after.is_empty()
+            || after.starts_with('\n')
+            || after.starts_with('\r')
+            || after.starts_with(' ')
+        {
+            self.advance_n(4);
+            let token = self.make_token(TokenKind::Else);
+            // Skip any trailing spaces (though there shouldn't be content after else)
+            self.skip_spaces();
+            self.mode = ScanMode::LineStart;
+            return Some(token);
+        }
+        None
     }
 
     /// Try to match a keyword followed by space. Returns token if matched.
@@ -222,6 +261,130 @@ impl<'a> Scanner<'a> {
         // Error recovery: advance past the invalid character to avoid infinite loop
         self.advance();
         Err(self.error("Expected identifier after 'extern'"))
+    }
+
+    /// Scan condition expression after if/elseif keyword.
+    /// Reuses interpolation scanning for expression tokens.
+    fn scan_condition(&mut self) -> Result<Token<'a>, LexicalError> {
+        self.skip_spaces();
+        self.start = self.current;
+
+        if self.is_at_end() || self.is_at_newline() {
+            // End of condition expression - transition back to line start
+            self.mode = ScanMode::LineStart;
+            return self.scan_token();
+        }
+
+        let current_char = self.peek().unwrap();
+
+        // Operators (reuse from interpolation)
+        // == operator
+        if current_char == '=' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::EqualEqual));
+        }
+
+        // != operator
+        if current_char == '!' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::BangEqual));
+        }
+
+        // <= operator
+        if current_char == '<' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::LessEqual));
+        }
+
+        // < operator
+        if current_char == '<' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Less));
+        }
+
+        // >= operator
+        if current_char == '>' && self.peek_next() == Some('=') {
+            self.advance();
+            self.advance();
+            return Ok(self.make_token(TokenKind::GreaterEqual));
+        }
+
+        // > operator
+        if current_char == '>' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Greater));
+        }
+
+        // Arithmetic operators
+        if current_char == '+' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Plus));
+        }
+
+        if current_char == '-' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Minus));
+        }
+
+        if current_char == '*' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Star));
+        }
+
+        if current_char == '/' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Slash));
+        }
+
+        if current_char == '%' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Percent));
+        }
+
+        // Parentheses for grouping
+        if current_char == '(' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::OpenParen));
+        }
+
+        if current_char == ')' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::CloseParen));
+        }
+
+        // Reject lone = with helpful error
+        if current_char == '=' {
+            self.advance();
+            return Err(self.error("Assignment not allowed in condition - did you mean '=='?"));
+        }
+
+        // Reject lone ! with helpful error
+        if current_char == '!' {
+            self.advance();
+            return Err(self.error("Expected '!=' for inequality"));
+        }
+
+        // String literal
+        if current_char == '"' {
+            return self.scan_string();
+        }
+
+        // Number literal
+        if current_char.is_ascii_digit() {
+            return self.scan_number();
+        }
+
+        // Identifier or keyword (true/false/and/or/not)
+        if current_char.is_ascii_alphabetic() || current_char == '_' {
+            return self.scan_identifier_or_keyword();
+        }
+
+        // Error recovery
+        self.advance();
+        Err(self.error("Invalid character in condition"))
     }
 
     /// Scan text content with interpolation support

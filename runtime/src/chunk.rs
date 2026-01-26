@@ -26,6 +26,11 @@ pub enum Instruction {
     Jump {
         target: usize,
     },
+    /// Conditional jump: pop bool from stack, jump to target if false.
+    /// Uses absolute instruction index (same as Jump).
+    JumpIfFalse {
+        target: usize,
+    },
     /// Initialize a save variable only if it doesn't exist in storage.
     /// Pops value from stack, calls storage.initialize_if_absent(name, value).
     InitStorage {
@@ -141,12 +146,12 @@ impl Chunk {
         self.code.len()
     }
 
-    /// Patch a Jump instruction at `offset` to jump to `target`.
+    /// Patch a Jump or JumpIfFalse instruction at `offset` to jump to `target`.
     pub fn patch_jump(&mut self, offset: usize, target: usize) {
-        if let Instruction::Jump { target: ref mut t } = self.code[offset] {
-            *t = target;
-        } else {
-            panic!("patch_jump called on non-Jump instruction");
+        match &mut self.code[offset] {
+            Instruction::Jump { target: t } => *t = target,
+            Instruction::JumpIfFalse { target: t } => *t = target,
+            _ => panic!("patch_jump called on non-jump instruction at offset {}", offset),
         }
     }
 

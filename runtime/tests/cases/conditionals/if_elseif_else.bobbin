@@ -1,0 +1,8 @@
+temp x = 2
+if x == 1
+    x is one.
+elseif x == 2
+    x is two.
+else
+    x is something else.
+Done.

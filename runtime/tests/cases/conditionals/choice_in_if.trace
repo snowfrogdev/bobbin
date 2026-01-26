@@ -1,0 +1,25 @@
+# Test choice inside if block
+
+--- path: first
+> Pick one:
+[advance]
+! waiting_for_choice
+? First | Second
+[choice 0]
+> You picked first.
+[advance]
+> After the if.
+[advance]
+! done
+
+--- path: second
+> Pick one:
+[advance]
+! waiting_for_choice
+? First | Second
+[choice 1]
+> You picked second.
+[advance]
+> After the if.
+[advance]
+! done

@@ -1,0 +1,8 @@
+temp bonus = true
+Make a choice:
+- Option A
+    if bonus
+        You got a bonus!
+    Result A.
+- Option B
+    Result B.

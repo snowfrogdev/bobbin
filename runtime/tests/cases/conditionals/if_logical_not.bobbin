@@ -1,0 +1,5 @@
+temp is_tired = false
+if not is_tired
+    You feel energetic!
+else
+    You need rest.

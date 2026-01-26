@@ -1,0 +1,7 @@
+temp outer = true
+temp inner = true
+if outer
+    Outer is true.
+    if inner
+        Inner is also true.
+Done.

@@ -1,0 +1,3 @@
+if false
+    This should not appear.
+After the if.

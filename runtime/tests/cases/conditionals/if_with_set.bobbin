@@ -1,0 +1,4 @@
+temp flag = false
+if true
+    set flag = true
+Flag is {flag}.

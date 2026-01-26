@@ -1,0 +1,6 @@
+temp has_key = false
+temp has_lockpick = true
+if has_key or has_lockpick
+    You can open the door.
+else
+    The door is locked.

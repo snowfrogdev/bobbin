@@ -1,0 +1,4 @@
+if false
+    This branch.
+elseif 10
+    This should error.

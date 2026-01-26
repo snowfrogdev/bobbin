@@ -18,6 +18,19 @@ pub enum Stmt {
     ExternDecl(ExternDeclData),
     Assignment(VarBindingData),
     ChoiceSet { choices: Vec<Choice> },
+    /// Conditional statement: if/elseif/else
+    If {
+        id: NodeId,
+        /// The condition expression (must evaluate to bool)
+        condition: Expr,
+        /// Statements to execute if condition is true
+        then_branch: Vec<Stmt>,
+        /// Optional elseif branches: (condition, statements)
+        elseif_branches: Vec<(Expr, Vec<Stmt>)>,
+        /// Optional else branch
+        else_branch: Option<Vec<Stmt>>,
+        span: Span,
+    },
 }
 
 #[derive(Debug, Clone)]

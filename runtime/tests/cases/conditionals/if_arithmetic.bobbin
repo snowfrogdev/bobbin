@@ -1,0 +1,6 @@
+temp gold = 50
+temp cost = 30
+if gold - cost >= 0
+    You can afford it!
+else
+    You need more gold.

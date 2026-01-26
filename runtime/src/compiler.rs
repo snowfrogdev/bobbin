@@ -171,6 +171,81 @@ impl<'a> Compiler<'a> {
                 self.chunk
                     .patch_choice_targets(choice_set_offset, choice_targets);
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                elseif_branches,
+                else_branch,
+                span,
+                ..
+            } => {
+                // Collect all jumps that need to go to the end (after any branch executes)
+                let mut end_jump_patches: Vec<usize> = Vec::new();
+
+                // === Compile IF branch ===
+                // Compile condition expression (pushes bool onto stack)
+                self.compile_expr(condition);
+
+                // Emit JumpIfFalse with placeholder target (0)
+                let if_false_jump = self.chunk.current_offset();
+                self.chunk
+                    .emit(Instruction::JumpIfFalse { target: 0 }, span.start);
+
+                // Compile then_branch statements
+                for stmt in then_branch {
+                    self.compile_stmt(stmt);
+                }
+
+                // After then_branch, jump to end (skip elseif/else)
+                let then_end_jump = self.chunk.current_offset();
+                self.chunk
+                    .emit(Instruction::Jump { target: 0 }, span.start);
+                end_jump_patches.push(then_end_jump);
+
+                // Patch if_false_jump to land here (start of elseif/else chain)
+                let elseif_start = self.chunk.current_offset();
+                self.chunk.patch_jump(if_false_jump, elseif_start);
+
+                // === Compile ELSEIF branches ===
+                for (elseif_cond, elseif_stmts) in elseif_branches {
+                    // Compile elseif condition
+                    self.compile_expr(elseif_cond);
+
+                    // Emit JumpIfFalse to skip this elseif block
+                    let elseif_false_jump = self.chunk.current_offset();
+                    self.chunk
+                        .emit(Instruction::JumpIfFalse { target: 0 }, span.start);
+
+                    // Compile elseif statements
+                    for stmt in elseif_stmts {
+                        self.compile_stmt(stmt);
+                    }
+
+                    // After elseif block, jump to end
+                    let elseif_end_jump = self.chunk.current_offset();
+                    self.chunk
+                        .emit(Instruction::Jump { target: 0 }, span.start);
+                    end_jump_patches.push(elseif_end_jump);
+
+                    // Patch elseif_false_jump to land here (next elseif or else)
+                    let next_branch = self.chunk.current_offset();
+                    self.chunk.patch_jump(elseif_false_jump, next_branch);
+                }
+
+                // === Compile ELSE branch (if present) ===
+                if let Some(else_stmts) = else_branch {
+                    for stmt in else_stmts {
+                        self.compile_stmt(stmt);
+                    }
+                    // No jump needed after else - it falls through to end
+                }
+
+                // === Patch all end jumps to land here ===
+                let end_target = self.chunk.current_offset();
+                for jump_offset in end_jump_patches {
+                    self.chunk.patch_jump(jump_offset, end_target);
+                }
+            }
         }
     }
 

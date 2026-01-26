@@ -1,0 +1,5 @@
+temp is_ready = true
+if is_ready
+    Let's go!
+else
+    Not yet.

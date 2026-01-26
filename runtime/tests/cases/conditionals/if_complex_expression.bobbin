@@ -1,0 +1,7 @@
+temp a = false
+temp b = true
+temp c = true
+if (a or b) and c
+    Complex condition passed!
+else
+    Complex condition failed.

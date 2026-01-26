@@ -1,0 +1,5 @@
+temp show = true
+Before.
+if show
+    Visible.
+After.
