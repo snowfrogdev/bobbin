@@ -86,7 +86,7 @@ func _on_dialog_panel_input(event: InputEvent) -> void:
 
 
 func _start_cutscene() -> void:
-	_runtime = Bobbin.create_with_host("res://dialog/feature_showcase.bobbin", _host_state)
+	_runtime = Bobbin.create_with_host("res://dialog/test_expressions.bobbin", _host_state)
 
 	# Connect hot reload signals (debug builds only)
 	if OS.is_debug_build():

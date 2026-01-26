@@ -1,0 +1,173 @@
+// Test dialogue for expression and conditional features
+// Tests arithmetic, comparison, logical operators, and if/elseif/else
+
+extern player_name
+extern player_gold
+
+save health = 100
+save armor = 25
+
+temp damage = 30
+temp healing = 15
+temp multiplier = 2
+
+// ============================================
+// SECTION 1: Arithmetic Operators
+// ============================================
+
+Welcome, {player_name}! Let's test some expressions.
+
+--- Arithmetic Operations ---
+Starting health: {health}
+Damage to take: {damage}
+After damage: {health - damage}
+
+Addition: 10 + 5 = {10 + 5}
+Subtraction: 20 - 8 = {20 - 8}
+Multiplication: 6 * 7 = {6 * 7}
+Division: 100 / 4 = {100 / 4}
+Modulo: 17 % 5 = {17 % 5}
+
+Unary negation: -{damage} = {-damage}
+
+Parentheses: (2 + 3) * 4 = {(2 + 3) * 4}
+Complex: ((health - damage) + healing) * multiplier = {((health - damage) + healing) * multiplier}
+
+// ============================================
+// SECTION 2: Comparison Operators
+// ============================================
+
+--- Comparison Operations ---
+Your gold: {player_gold}
+
+Is gold > 100? {player_gold > 100}
+Is gold >= 100? {player_gold >= 100}
+Is gold < 200? {player_gold < 200}
+Is gold <= 150? {player_gold <= 150}
+
+Comparing numbers:
+50 < 100: {50 < 100}
+100 > 50: {100 > 50}
+health == 100: {health == 100}
+damage != 30: {damage != 30}
+
+// ============================================
+// SECTION 3: Equality Operators
+// ============================================
+
+--- Equality Operations ---
+health == 100: {health == 100}
+health != 50: {health != 50}
+
+String equality test:
+temp name1 = "Alice"
+temp name2 = "Bob"
+name1 == "Alice": {name1 == "Alice"}
+name1 != name2: {name1 != name2}
+
+Boolean equality:
+temp flag1 = true
+temp flag2 = false
+flag1 == true: {flag1 == true}
+flag1 != flag2: {flag1 != flag2}
+
+// ============================================
+// SECTION 4: Logical Operators
+// ============================================
+
+--- Logical Operations ---
+temp is_healthy = true
+temp has_weapon = true
+temp is_tired = false
+
+is_healthy and has_weapon: {is_healthy and has_weapon}
+is_healthy or is_tired: {is_healthy or is_tired}
+not is_tired: {not is_tired}
+
+Combined: (is_healthy and has_weapon) or is_tired = {(is_healthy and has_weapon) or is_tired}
+
+temp in_range = false
+set in_range = health > 50 and health < 150
+Health in range (50-150): {in_range}
+
+// ============================================
+// SECTION 5: If/Elseif/Else Conditionals
+// ============================================
+
+--- Conditional Statements ---
+
+if health > 75
+    Your health is excellent!
+elseif health > 50
+    Your health is okay.
+elseif health > 25
+    Your health is low!
+else
+    You're barely alive!
+
+temp can_afford = false
+
+if player_gold >= 100
+    set can_afford = true
+    You can afford the special item!
+else
+    You need more gold for the special item.
+
+// ============================================
+// SECTION 6: Conditionals with Choices
+// ============================================
+
+--- Shop Menu ---
+
+- Check inventory
+    You look through your belongings.
+    Health: {health}, Armor: {armor}
+    Gold: {player_gold}
+
+- Visit healer
+    temp heal_cost = 20
+    if player_gold >= heal_cost
+        The healer offers to restore your health.
+        - Accept healing ({heal_cost} gold)
+            set health = 100
+            You feel refreshed! Health: {health}
+        - Decline
+            Maybe next time.
+    else
+        The healer says you can't afford treatment.
+
+- Test combat math
+    temp base_damage = 15
+    temp crit_multiplier = 2
+    temp total_damage = base_damage * crit_multiplier
+
+    Base damage: {base_damage}
+    Critical multiplier: {crit_multiplier}
+    Total damage: {total_damage}
+
+    Armor reduces damage by: {armor}
+    Final damage: {total_damage - armor}
+
+    if total_damage > armor
+        The attack gets through!
+        temp actual = total_damage - armor
+        You take {actual} damage.
+    else
+        Your armor blocks the attack completely!
+
+- Leave
+    temp farewell_gold = player_gold
+    Goodbye, {player_name}!
+    You leave with {farewell_gold} gold.
+
+// ============================================
+// FINAL SUMMARY
+// ============================================
+
+--- Test Complete ---
+Final stats for {player_name}:
+  Health: {health}
+  Armor: {armor}
+  Gold: {player_gold}
+
+All expression tests completed!

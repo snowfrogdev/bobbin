@@ -6,6 +6,7 @@
     { "include": "#comment" },
     { "include": "#declaration" },
     { "include": "#assignment" },
+    { "include": "#conditional" },
     { "include": "#choice" },
     { "include": "#line" }
   ],
@@ -53,8 +54,35 @@
         "1": { "name": "keyword.other.set.bobbin" },
         "2": { "name": "variable.other.bobbin" },
         "3": { "name": "keyword.operator.assignment.bobbin" },
-        "4": { "patterns": [{ "include": "#value" }] }
+        "4": { "patterns": [{ "include": "#expression" }] }
       }
+    },
+    "conditional": {
+      "patterns": [
+        {
+          "name": "meta.conditional.if.bobbin",
+          "match": "^\\s*(if)\\s+(.+)$",
+          "captures": {
+            "1": { "name": "keyword.control.conditional.if.bobbin" },
+            "2": { "patterns": [{ "include": "#expression" }] }
+          }
+        },
+        {
+          "name": "meta.conditional.elseif.bobbin",
+          "match": "^\\s*(elseif)\\s+(.+)$",
+          "captures": {
+            "1": { "name": "keyword.control.conditional.elseif.bobbin" },
+            "2": { "patterns": [{ "include": "#expression" }] }
+          }
+        },
+        {
+          "name": "meta.conditional.else.bobbin",
+          "match": "^\\s*(else)\\s*$",
+          "captures": {
+            "1": { "name": "keyword.control.conditional.else.bobbin" }
+          }
+        }
+      ]
     },
     "choice": {
       "name": "meta.choice.bobbin",
@@ -66,7 +94,7 @@
     },
     "line": {
       "name": "meta.line.bobbin",
-      "match": "^(?!\\s*(?:save|temp|extern|set|//|-)\\s)(.+)$",
+      "match": "^(?!\\s*(?:save|temp|extern|set|if|elseif|else|//|-)\\s?)(.+)$",
       "captures": {
         "1": { "patterns": [{ "include": "#text-content" }] }
       }
@@ -88,11 +116,34 @@
         "0": { "name": "punctuation.section.interpolation.end.bobbin" }
       },
       "patterns": [
+        { "include": "#expression" }
+      ]
+    },
+    "expression": {
+      "patterns": [
+        { "include": "#string" },
+        { "include": "#number" },
+        { "include": "#boolean" },
+        { "include": "#logical-operator" },
+        { "include": "#comparison-operator" },
+        { "include": "#arithmetic-operator" },
         {
           "name": "variable.other.readwrite.bobbin",
           "match": "[a-zA-Z_][a-zA-Z0-9_]*"
         }
       ]
+    },
+    "logical-operator": {
+      "name": "keyword.operator.logical.bobbin",
+      "match": "\\b(and|or|not)\\b"
+    },
+    "comparison-operator": {
+      "name": "keyword.operator.comparison.bobbin",
+      "match": "==|!=|<=|>=|<|>"
+    },
+    "arithmetic-operator": {
+      "name": "keyword.operator.arithmetic.bobbin",
+      "match": "[+\\-*/%]"
     },
     "escaped-brace": {
       "name": "constant.character.escape.bobbin",
@@ -100,9 +151,7 @@
     },
     "value": {
       "patterns": [
-        { "include": "#string" },
-        { "include": "#number" },
-        { "include": "#boolean" }
+        { "include": "#expression" }
       ]
     },
     "string": {

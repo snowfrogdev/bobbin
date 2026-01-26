@@ -1067,6 +1067,12 @@ mod syntax_colors {
     pub fn interpolation() -> Color {
         Color::from_rgb(0.80, 0.60, 0.80)
     } // Purple
+    pub fn control() -> Color {
+        Color::from_rgb(0.86, 0.44, 0.70)
+    } // Pink/magenta for control flow
+    pub fn operator() -> Color {
+        Color::from_rgb(0.90, 0.70, 0.50)
+    } // Orange for operators
     pub fn error() -> Color {
         Color::from_rgb(1.0, 0.3, 0.3)
     } // Red
@@ -1077,14 +1083,37 @@ mod syntax_colors {
     /// Returns the color for a token kind, or None if the token should not be highlighted.
     pub fn for_token(kind: TokenKind) -> Option<Color> {
         match kind {
+            // Declaration keywords
             TokenKind::Temp | TokenKind::Save | TokenKind::Set | TokenKind::Extern => {
                 Some(keyword())
             }
+            // Control flow keywords
+            TokenKind::If | TokenKind::Elseif | TokenKind::Else => Some(control()),
+            // Logical operators (word-based)
+            TokenKind::And | TokenKind::Or | TokenKind::Not => Some(keyword()),
+            // Boolean literals
             TokenKind::True | TokenKind::False => Some(keyword()),
+            // Literals
             TokenKind::String => Some(string()),
             TokenKind::Number => Some(number()),
+            // Variables
             TokenKind::Identifier => Some(variable()),
+            // Interpolation braces
             TokenKind::OpenBrace | TokenKind::CloseBrace => Some(interpolation()),
+            // Operators
+            TokenKind::EqualEqual
+            | TokenKind::BangEqual
+            | TokenKind::Less
+            | TokenKind::LessEqual
+            | TokenKind::Greater
+            | TokenKind::GreaterEqual
+            | TokenKind::Plus
+            | TokenKind::Minus
+            | TokenKind::Star
+            | TokenKind::Slash
+            | TokenKind::Percent => Some(operator()),
+            // Parentheses
+            TokenKind::OpenParen | TokenKind::CloseParen => Some(interpolation()),
             _ => None,
         }
     }
