@@ -1,0 +1,3 @@
+temp a = false
+temp b = true
+{a or b}

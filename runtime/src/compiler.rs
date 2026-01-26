@@ -262,6 +262,9 @@ impl<'a> Compiler<'a> {
                     BinaryOp::Multiply => self.chunk.emit(Instruction::Multiply, span.start),
                     BinaryOp::Divide => self.chunk.emit(Instruction::Divide, span.start),
                     BinaryOp::Modulo => self.chunk.emit(Instruction::Modulo, span.start),
+                    // Logical operators
+                    BinaryOp::And => self.chunk.emit(Instruction::And, span.start),
+                    BinaryOp::Or => self.chunk.emit(Instruction::Or, span.start),
                 }
             }
             Expr::Unary { op, expr, span, .. } => {
@@ -270,6 +273,7 @@ impl<'a> Compiler<'a> {
                 // Emit unary operator instruction
                 match op {
                     UnaryOp::Negate => self.chunk.emit(Instruction::Negate, span.start),
+                    UnaryOp::Not => self.chunk.emit(Instruction::Not, span.start),
                 }
             }
         }

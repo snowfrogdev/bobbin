@@ -239,9 +239,87 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
     /// Parse an expression inside interpolation braces using precedence-climbing.
     /// Entry point for expression parsing. Returns the expression and its span.
     fn parse_interpolation_expr(&mut self, start: usize) -> Option<(Expr, Span)> {
-        let (expr, end) = self.parse_equality()?;
+        let (expr, end) = self.parse_logical_or()?;
         let span = Span { start, end };
         Some((expr, span))
+    }
+
+    /// Parse logical OR: logical_and ( "or" logical_and )*
+    /// Lowest precedence binary operator.
+    fn parse_logical_or(&mut self) -> Option<(Expr, usize)> {
+        let (mut left, mut end) = self.parse_logical_and()?;
+
+        while let Some(Ok(t)) = self.tokens.peek() {
+            if t.kind != TokenKind::Or {
+                break;
+            }
+            let op_token = self.advance();
+
+            match self.parse_logical_and() {
+                Some((right, right_end)) => {
+                    let span = Span {
+                        start: left.span().start,
+                        end: right_end,
+                    };
+                    left = Expr::Binary {
+                        id: self.next_id(),
+                        left: Box::new(left),
+                        op: BinaryOp::Or,
+                        right: Box::new(right),
+                        span,
+                    };
+                    end = right_end;
+                }
+                None => {
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression after 'or'".to_string(),
+                        span: op_token.span,
+                    });
+                    return None;
+                }
+            }
+        }
+
+        Some((left, end))
+    }
+
+    /// Parse logical AND: equality ( "and" equality )*
+    /// Higher precedence than OR, lower than equality.
+    fn parse_logical_and(&mut self) -> Option<(Expr, usize)> {
+        let (mut left, mut end) = self.parse_equality()?;
+
+        while let Some(Ok(t)) = self.tokens.peek() {
+            if t.kind != TokenKind::And {
+                break;
+            }
+            let op_token = self.advance();
+
+            match self.parse_equality() {
+                Some((right, right_end)) => {
+                    let span = Span {
+                        start: left.span().start,
+                        end: right_end,
+                    };
+                    left = Expr::Binary {
+                        id: self.next_id(),
+                        left: Box::new(left),
+                        op: BinaryOp::And,
+                        right: Box::new(right),
+                        span,
+                    };
+                    end = right_end;
+                }
+                None => {
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression after 'and'".to_string(),
+                        span: op_token.span,
+                    });
+                    return None;
+                }
+            }
+        }
+
+        Some((left, end))
     }
 
     /// Parse equality: comparison ( ( "==" | "!=" ) comparison )*
@@ -407,8 +485,8 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         Some((left, end))
     }
 
-    /// Parse unary: ( "-" )* primary
-    /// Unary is right-recursive for right associativity (--x parses as -(-x))
+    /// Parse unary: ( "-" | "not" )* primary
+    /// Unary is right-recursive for right associativity (--x parses as -(-x), not not x parses as not (not x))
     fn parse_unary(&mut self) -> Option<(Expr, usize)> {
         if let Some(Ok(t)) = self.tokens.peek() {
             if t.kind == TokenKind::Minus {
@@ -428,6 +506,24 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                     end,
                 ));
             }
+            if t.kind == TokenKind::Not {
+                let op_token = self.advance();
+                // Right-recursive for right-associativity: "not not x" = "not (not x)"
+                let (expr, end) = self.parse_unary()?;
+                let span = Span {
+                    start: op_token.span.start,
+                    end,
+                };
+                return Some((
+                    Expr::Unary {
+                        id: self.next_id(),
+                        op: UnaryOp::Not,
+                        expr: Box::new(expr),
+                        span,
+                    },
+                    end,
+                ));
+            }
         }
         self.parse_primary()
     }
@@ -439,7 +535,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                 // Parenthesized expression
                 TokenKind::OpenParen => {
                     self.advance(); // consume '('
-                    let (expr, _) = self.parse_equality()?;
+                    let (expr, _) = self.parse_logical_or()?;
                     if self.check(TokenKind::CloseParen) {
                         let close = self.advance();
                         Some((expr, close.span.end))

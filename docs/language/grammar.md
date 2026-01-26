@@ -40,12 +40,14 @@ digit  = "0" | ... | "9" ;
 text          = { text_segment }+ ;
 text_segment  = text_char | interpolation | escaped_brace ;
 interpolation = "{" , expression , "}" ;
-expression    = equality ;
+expression    = logical_or ;
+logical_or    = logical_and , { "or" , logical_and } ;
+logical_and   = equality , { "and" , equality } ;
 equality      = comparison , { ( "==" | "!=" ) , comparison } ;
 comparison    = term , { ( "<" | "<=" | ">" | ">=" ) , term } ;
 term          = factor , { ( "+" | "-" ) , factor } ;
 factor        = unary , { ( "*" | "/" | "%" ) , unary } ;
-unary         = "-" , unary | primary ;
+unary         = ( "-" | "not" ) , unary | primary ;
 primary       = identifier | literal | "(" , expression , ")" ;
 escaped_brace = "{{" | "}}" ;
 text_char     = ? any character except "{", "}", and newline ? ;
@@ -121,12 +123,14 @@ String literals support these escape sequences:
   - Unary negation: `{-x}` negates a numeric value
   - Parentheses for grouping: `{(a + b) * c}`
 - **Operator precedence** (lowest to highest):
-  1. `==`, `!=` (equality)
-  2. `<`, `<=`, `>`, `>=` (comparison)
-  3. `+`, `-` (addition, subtraction)
-  4. `*`, `/`, `%` (multiplication, division, modulo)
-  5. Unary `-` (negation)
-  6. `()` (parentheses)
+  1. `or` (logical OR)
+  2. `and` (logical AND)
+  3. `==`, `!=` (equality)
+  4. `<`, `<=`, `>`, `>=` (comparison)
+  5. `+`, `-` (addition, subtraction)
+  6. `*`, `/`, `%` (multiplication, division, modulo)
+  7. `not`, unary `-` (logical NOT, negation)
+  8. `()` (parentheses)
 - **Equality expressions**: `{x == y}` and `{x != y}`
   - Both operands can be variables or literals (symmetric expressions)
   - Supported forms: `{var == var}`, `{var == literal}`, `{literal == var}`, `{literal == literal}`
@@ -136,6 +140,13 @@ String literals support these escape sequences:
   - Both operands must be **numbers** (strings and booleans are not allowed)
   - Result is `true` or `false` (displayed as text)
   - Comparing non-numeric types is a semantic error
+- **Logical expressions**: `{a and b}`, `{a or b}`, `{not a}`
+  - All operands must be **booleans** (numbers and strings are not allowed)
+  - `and` returns `true` if both operands are `true`
+  - `or` returns `true` if at least one operand is `true`
+  - `not` inverts the boolean value
+  - Both operands are always evaluated (no short-circuit evaluation)
+  - Note: `and`, `or`, `not` are reserved keywords in interpolation contexts
 - Examples:
   - `Welcome, {player_name}! You have {gold} gold.`
   - `Damage dealt: {base_damage * multiplier}`
@@ -146,13 +157,17 @@ String literals support these escape sequences:
   - `Always true: {true == true}` (literal-to-literal comparison)
   - `Low health: {health < 10}` or `Enough gold: {gold >= 100}`
   - `Combined: {(2 + 3) * 4}` → `20`
+  - `Ready for battle: {is_brave and has_sword}`
+  - `Can proceed: {is_healthy or has_potion}`
+  - `Not tired: {not is_tired}`
+  - `In range: {x > 5 and x < 10}`
+  - `Override precedence: {(false or true) and true}` → `true`
 
 ## Future Syntax (TBD)
 
 The following syntax elements are planned but not yet specified:
 
 - **Compound assignment operators**: `+=`, `-=`, `*=`, `/=`
-- **Logical operators**: `and`/`or`/`not` (or `&&`/`||`/`!`)
 - **Conditionals**: `if`/`else` structure
 - **Tables**: Literal syntax, access syntax, methods
 - **Imports**: Module system syntax

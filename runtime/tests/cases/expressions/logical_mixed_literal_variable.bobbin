@@ -1,0 +1,2 @@
+temp a = true
+{a and false}

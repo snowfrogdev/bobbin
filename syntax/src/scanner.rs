@@ -445,6 +445,9 @@ impl<'a> Scanner<'a> {
         let kind = match lexeme {
             "true" => TokenKind::True,
             "false" => TokenKind::False,
+            "and" => TokenKind::And,
+            "or" => TokenKind::Or,
+            "not" => TokenKind::Not,
             _ => TokenKind::Identifier,
         };
 

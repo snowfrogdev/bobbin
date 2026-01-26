@@ -337,6 +337,51 @@ impl VM {
                         }
                     }
                 }
+                Instruction::And => {
+                    // Stack: [..., left, right] -> [..., result]
+                    let b = self.stack.pop().expect("stack underflow: compiler bug");
+                    let a = self.stack.pop().expect("stack underflow: compiler bug");
+                    match (&a, &b) {
+                        (Value::Bool(a_val), Value::Bool(b_val)) => {
+                            self.stack.push(Value::Bool(*a_val && *b_val));
+                        }
+                        _ => {
+                            return Err(RuntimeError::TypeMismatch {
+                                expected: "bool",
+                                got: a.type_name(),
+                            });
+                        }
+                    }
+                }
+                Instruction::Or => {
+                    // Stack: [..., left, right] -> [..., result]
+                    let b = self.stack.pop().expect("stack underflow: compiler bug");
+                    let a = self.stack.pop().expect("stack underflow: compiler bug");
+                    match (&a, &b) {
+                        (Value::Bool(a_val), Value::Bool(b_val)) => {
+                            self.stack.push(Value::Bool(*a_val || *b_val));
+                        }
+                        _ => {
+                            return Err(RuntimeError::TypeMismatch {
+                                expected: "bool",
+                                got: a.type_name(),
+                            });
+                        }
+                    }
+                }
+                Instruction::Not => {
+                    // Stack: [..., operand] -> [..., result]
+                    let value = self.stack.pop().expect("stack underflow: compiler bug");
+                    match value {
+                        Value::Bool(b) => self.stack.push(Value::Bool(!b)),
+                        _ => {
+                            return Err(RuntimeError::TypeMismatch {
+                                expected: "bool",
+                                got: value.type_name(),
+                            });
+                        }
+                    }
+                }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK
                     return Ok(StepResult::Done);

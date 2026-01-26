@@ -48,6 +48,9 @@ pub enum Literal {
 /// Binary operator for expressions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
+    // Logical operators (lowest precedence)
+    Or,           // or
+    And,          // and
     // Comparison operators
     Equal,        // ==
     NotEqual,     // !=
@@ -67,6 +70,7 @@ pub enum BinaryOp {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnaryOp {
     Negate, // -x
+    Not,    // not x
 }
 
 /// A general expression that can be evaluated to produce a value.

@@ -13,6 +13,11 @@ pub enum TokenKind {
     Set,
     Extern,
 
+    // Logical operators (word-based)
+    And, // and
+    Or,  // or
+    Not, // not
+
     // Identifiers and Literals
     Identifier,
     String,

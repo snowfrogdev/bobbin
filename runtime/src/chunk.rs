@@ -67,6 +67,12 @@ pub enum Instruction {
     Modulo,
     /// Pop one value (number), push its negation.
     Negate,
+    /// Pop two bools, push logical AND result.
+    And,
+    /// Pop two bools, push logical OR result.
+    Or,
+    /// Pop one bool, push logical NOT result.
+    Not,
     Return,
 }
 

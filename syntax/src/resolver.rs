@@ -73,6 +73,13 @@ pub enum SemanticError {
         operand_type: ValueType,
         span: Span,
     },
+    /// Logical operators (and, or, not) require boolean operands
+    LogicalRequiresBool {
+        op: String,
+        operand_desc: String,
+        operand_type: ValueType,
+        span: Span,
+    },
 }
 
 impl IntoDiagnostic for SemanticError {
@@ -170,6 +177,7 @@ impl IntoDiagnostic for SemanticError {
             SemanticError::UnaryRequiresNumber { op, operand_type, span } => {
                 let op_str = match op {
                     UnaryOp::Negate => "-",
+                    UnaryOp::Not => "not",
                 };
                 Diagnostic::error(
                     format!(
@@ -182,6 +190,22 @@ impl IntoDiagnostic for SemanticError {
                 )
                 .with_note("Negation operator only works with numbers")
             }
+            SemanticError::LogicalRequiresBool {
+                op,
+                operand_desc,
+                operand_type,
+                span,
+            } => Diagnostic::error(
+                format!(
+                    "operator '{}' requires boolean operands, but {} is {}",
+                    op,
+                    operand_desc,
+                    operand_type.name()
+                ),
+                span,
+                format!("expected bool, got {}", operand_type.name()),
+            )
+            .with_note("Logical operators (and, or, not) only work with boolean values"),
         }
     }
 }
@@ -422,7 +446,10 @@ impl<'a> Resolver<'a> {
             Expr::Literal { value, .. } => Some(ValueType::from_literal(value)),
             Expr::VarRef { name, .. } => self.lookup_type(name),
             Expr::Unary { op: UnaryOp::Negate, .. } => Some(ValueType::Number),
+            Expr::Unary { op: UnaryOp::Not, .. } => Some(ValueType::Bool),
             Expr::Binary { op, .. } => match op {
+                // Logical operators return Bool
+                BinaryOp::And | BinaryOp::Or => Some(ValueType::Bool),
                 // Comparison operators return Bool
                 BinaryOp::Equal
                 | BinaryOp::NotEqual
@@ -509,6 +536,28 @@ impl<'a> Resolver<'a> {
             return;
         }
 
+        // Logical operators (and, or) require booleans
+        if matches!(op, BinaryOp::And | BinaryOp::Or) {
+            let op_str = Self::op_to_string(op);
+            if left_type != ValueType::Bool {
+                self.errors.push(SemanticError::LogicalRequiresBool {
+                    op: op_str.clone(),
+                    operand_desc: self.describe_expr(left),
+                    operand_type: left_type,
+                    span: left.span(),
+                });
+            }
+            if right_type != ValueType::Bool {
+                self.errors.push(SemanticError::LogicalRequiresBool {
+                    op: op_str,
+                    operand_desc: self.describe_expr(right),
+                    operand_type: right_type,
+                    span: right.span(),
+                });
+            }
+            return;
+        }
+
         // Equality comparisons (==, !=) require same type
         if left_type != right_type {
             self.errors.push(SemanticError::TypeMismatch {
@@ -524,6 +573,8 @@ impl<'a> Resolver<'a> {
     /// Convert a BinaryOp to its string representation for error messages.
     fn op_to_string(op: BinaryOp) -> String {
         match op {
+            BinaryOp::And => "and".to_string(),
+            BinaryOp::Or => "or".to_string(),
             BinaryOp::Equal => "==".to_string(),
             BinaryOp::NotEqual => "!=".to_string(),
             BinaryOp::Less => "<".to_string(),
@@ -546,6 +597,7 @@ impl<'a> Resolver<'a> {
             Expr::VarRef { name, .. } => name.clone(),
             Expr::Unary { .. } => "unary expression".to_string(),
             Expr::Binary { op, .. } => match op {
+                BinaryOp::And | BinaryOp::Or => "logical expression".to_string(),
                 BinaryOp::Equal
                 | BinaryOp::NotEqual
                 | BinaryOp::Less
@@ -573,6 +625,16 @@ impl<'a> Resolver<'a> {
                 if operand_type != ValueType::Number {
                     self.errors.push(SemanticError::UnaryRequiresNumber {
                         op,
+                        operand_type,
+                        span,
+                    });
+                }
+            }
+            UnaryOp::Not => {
+                if operand_type != ValueType::Bool {
+                    self.errors.push(SemanticError::LogicalRequiresBool {
+                        op: "not".to_string(),
+                        operand_desc: self.describe_expr(expr),
                         operand_type,
                         span,
                     });

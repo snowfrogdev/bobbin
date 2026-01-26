@@ -491,3 +491,191 @@ fn errors_negation_bool() {
         &support::cases_dir().join("expressions/errors/negation_bool.bobbin"),
     );
 }
+
+// ============================================
+// Logical Operator Tests (and, or, not)
+// ============================================
+
+// --- Basic truth table tests ---
+
+#[test]
+fn logical_and_true_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_and_true_true.bobbin"));
+}
+
+#[test]
+fn logical_and_true_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_and_true_false.bobbin"));
+}
+
+#[test]
+fn logical_and_false_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_and_false_true.bobbin"));
+}
+
+#[test]
+fn logical_and_false_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_and_false_false.bobbin"));
+}
+
+#[test]
+fn logical_or_true_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_or_true_false.bobbin"));
+}
+
+#[test]
+fn logical_or_false_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_or_false_true.bobbin"));
+}
+
+#[test]
+fn logical_or_false_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_or_false_false.bobbin"));
+}
+
+#[test]
+fn logical_not_true() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_not_true.bobbin"));
+}
+
+#[test]
+fn logical_not_false() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_not_false.bobbin"));
+}
+
+// --- Variable-based tests ---
+
+#[test]
+fn logical_and_variables() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_and_variables.bobbin"));
+}
+
+#[test]
+fn logical_or_variables() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_or_variables.bobbin"));
+}
+
+#[test]
+fn logical_not_variable() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_not_variable.bobbin"));
+}
+
+#[test]
+fn logical_mixed_literal_variable() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_mixed_literal_variable.bobbin"));
+}
+
+#[test]
+fn logical_variable_with_comparison() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_variable_with_comparison.bobbin"));
+}
+
+// --- Precedence tests ---
+
+#[test]
+fn logical_precedence_and_or() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_precedence_and_or.bobbin"));
+}
+
+#[test]
+fn logical_precedence_or_and() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_precedence_or_and.bobbin"));
+}
+
+#[test]
+fn logical_precedence_not_and() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_precedence_not_and.bobbin"));
+}
+
+#[test]
+fn logical_precedence_not_or() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_precedence_not_or.bobbin"));
+}
+
+#[test]
+fn logical_with_comparison() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_with_comparison.bobbin"));
+}
+
+#[test]
+fn logical_with_equality() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_with_equality.bobbin"));
+}
+
+// --- Associativity tests ---
+
+#[test]
+fn logical_and_chained() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_and_chained.bobbin"));
+}
+
+#[test]
+fn logical_or_chained() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_or_chained.bobbin"));
+}
+
+#[test]
+fn logical_not_chained() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_not_chained.bobbin"));
+}
+
+// --- Parentheses tests ---
+
+#[test]
+fn logical_parens_override() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_parens_override.bobbin"));
+}
+
+#[test]
+fn logical_nested_parens() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_nested_parens.bobbin"));
+}
+
+#[test]
+fn logical_parens_with_not() {
+    support::run_output_test(&support::cases_dir().join("expressions/logical_parens_with_not.bobbin"));
+}
+
+// --- Logical operator error tests ---
+
+#[test]
+fn errors_logical_and_number_left() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/logical_and_number_left.bobbin"),
+    );
+}
+
+#[test]
+fn errors_logical_and_number_right() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/logical_and_number_right.bobbin"),
+    );
+}
+
+#[test]
+fn errors_logical_or_string() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/logical_or_string.bobbin"),
+    );
+}
+
+#[test]
+fn errors_logical_not_number() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/logical_not_number.bobbin"),
+    );
+}
+
+#[test]
+fn errors_logical_not_string() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/logical_not_string.bobbin"),
+    );
+}
+
+#[test]
+fn errors_logical_mixed_types() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/logical_mixed_types.bobbin"),
+    );
+}

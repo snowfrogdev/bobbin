@@ -1,0 +1,2 @@
+temp x = 42
+{not x}
