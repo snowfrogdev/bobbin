@@ -339,3 +339,155 @@ fn errors_undefined_comparison_both() {
         &support::cases_dir().join("expressions/errors/undefined_comparison_both.bobbin"),
     );
 }
+
+// ============================================
+// Arithmetic Tests (+, -, *, /, %)
+// ============================================
+
+#[test]
+fn arithmetic_add() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_add.bobbin"));
+}
+
+#[test]
+fn arithmetic_subtract() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_subtract.bobbin"));
+}
+
+#[test]
+fn arithmetic_multiply() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_multiply.bobbin"));
+}
+
+#[test]
+fn arithmetic_divide() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_divide.bobbin"));
+}
+
+#[test]
+fn arithmetic_modulo() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_modulo.bobbin"));
+}
+
+#[test]
+fn arithmetic_negation() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_negation.bobbin"));
+}
+
+#[test]
+fn arithmetic_double_negation() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_double_negation.bobbin"));
+}
+
+#[test]
+fn arithmetic_negative_literal() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_negative_literal.bobbin"));
+}
+
+#[test]
+fn arithmetic_chained() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_chained.bobbin"));
+}
+
+#[test]
+fn arithmetic_with_floats() {
+    support::run_output_test(&support::cases_dir().join("expressions/arithmetic_with_floats.bobbin"));
+}
+
+// ============================================
+// Precedence Tests
+// ============================================
+
+#[test]
+fn precedence_mul_over_add() {
+    support::run_output_test(&support::cases_dir().join("expressions/precedence_mul_over_add.bobbin"));
+}
+
+#[test]
+fn precedence_div_over_sub() {
+    support::run_output_test(&support::cases_dir().join("expressions/precedence_div_over_sub.bobbin"));
+}
+
+#[test]
+fn precedence_comparison_lowest() {
+    support::run_output_test(&support::cases_dir().join("expressions/precedence_comparison_lowest.bobbin"));
+}
+
+// ============================================
+// Associativity Tests
+// ============================================
+
+#[test]
+fn associativity_sub_left() {
+    support::run_output_test(&support::cases_dir().join("expressions/associativity_sub_left.bobbin"));
+}
+
+#[test]
+fn associativity_div_left() {
+    support::run_output_test(&support::cases_dir().join("expressions/associativity_div_left.bobbin"));
+}
+
+// ============================================
+// Parentheses Tests
+// ============================================
+
+#[test]
+fn parentheses_override() {
+    support::run_output_test(&support::cases_dir().join("expressions/parentheses_override.bobbin"));
+}
+
+#[test]
+fn parentheses_nested() {
+    support::run_output_test(&support::cases_dir().join("expressions/parentheses_nested.bobbin"));
+}
+
+#[test]
+fn parentheses_in_comparison() {
+    support::run_output_test(&support::cases_dir().join("expressions/parentheses_in_comparison.bobbin"));
+}
+
+// ============================================
+// Arithmetic Error Tests
+// ============================================
+
+#[test]
+fn errors_arithmetic_string_left() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/arithmetic_string_left.bobbin"),
+    );
+}
+
+#[test]
+fn errors_arithmetic_string_right() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/arithmetic_string_right.bobbin"),
+    );
+}
+
+#[test]
+fn errors_arithmetic_bool_left() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/arithmetic_bool_left.bobbin"),
+    );
+}
+
+#[test]
+fn errors_arithmetic_bool_right() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/arithmetic_bool_right.bobbin"),
+    );
+}
+
+#[test]
+fn errors_negation_string() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/negation_string.bobbin"),
+    );
+}
+
+#[test]
+fn errors_negation_bool() {
+    support::run_error_test(
+        &support::cases_dir().join("expressions/errors/negation_bool.bobbin"),
+    );
+}

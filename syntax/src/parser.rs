@@ -1,7 +1,7 @@
 use std::iter::Peekable;
 
 use crate::ast::{
-    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart,
+    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp,
     VarBindingData,
 };
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
@@ -236,79 +236,222 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         }
     }
 
-    /// Parse an expression inside interpolation braces: `{expr}` or `{expr == expr}`
-    /// Returns the full expression and its span.
+    /// Parse an expression inside interpolation braces using precedence-climbing.
+    /// Entry point for expression parsing. Returns the expression and its span.
     fn parse_interpolation_expr(&mut self, start: usize) -> Option<(Expr, Span)> {
-        // Parse left/primary expression
-        let (left, left_end) = self.parse_expr_primary()?;
+        let (expr, end) = self.parse_equality()?;
+        let span = Span { start, end };
+        Some((expr, span))
+    }
 
-        // Check for comparison operator
-        match self.tokens.peek() {
-            Some(Ok(t))
-                if matches!(
-                    t.kind,
-                    TokenKind::EqualEqual
-                        | TokenKind::BangEqual
-                        | TokenKind::Less
-                        | TokenKind::LessEqual
-                        | TokenKind::Greater
-                        | TokenKind::GreaterEqual
-                ) =>
-            {
+    /// Parse equality: comparison ( ( "==" | "!=" ) comparison )*
+    fn parse_equality(&mut self) -> Option<(Expr, usize)> {
+        let (mut left, mut end) = self.parse_comparison()?;
+
+        while let Some(Ok(t)) = self.tokens.peek() {
+            let op = match t.kind {
+                TokenKind::EqualEqual => BinaryOp::Equal,
+                TokenKind::BangEqual => BinaryOp::NotEqual,
+                _ => break,
+            };
+            let op_token = self.advance();
+
+            match self.parse_comparison() {
+                Some((right, right_end)) => {
+                    let span = Span {
+                        start: left.span().start,
+                        end: right_end,
+                    };
+                    left = Expr::Binary {
+                        id: self.next_id(),
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                        span,
+                    };
+                    end = right_end;
+                }
+                None => {
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression after equality operator".to_string(),
+                        span: op_token.span,
+                    });
+                    return None;
+                }
+            }
+        }
+
+        Some((left, end))
+    }
+
+    /// Parse comparison: term ( ( "<" | "<=" | ">" | ">=" ) term )*
+    fn parse_comparison(&mut self) -> Option<(Expr, usize)> {
+        let (mut left, mut end) = self.parse_term()?;
+
+        while let Some(Ok(t)) = self.tokens.peek() {
+            let op = match t.kind {
+                TokenKind::Less => BinaryOp::Less,
+                TokenKind::LessEqual => BinaryOp::LessEqual,
+                TokenKind::Greater => BinaryOp::Greater,
+                TokenKind::GreaterEqual => BinaryOp::GreaterEqual,
+                _ => break,
+            };
+            let op_token = self.advance();
+
+            match self.parse_term() {
+                Some((right, right_end)) => {
+                    let span = Span {
+                        start: left.span().start,
+                        end: right_end,
+                    };
+                    left = Expr::Binary {
+                        id: self.next_id(),
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                        span,
+                    };
+                    end = right_end;
+                }
+                None => {
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression after comparison operator".to_string(),
+                        span: op_token.span,
+                    });
+                    return None;
+                }
+            }
+        }
+
+        Some((left, end))
+    }
+
+    /// Parse term: factor ( ( "+" | "-" ) factor )*
+    fn parse_term(&mut self) -> Option<(Expr, usize)> {
+        let (mut left, mut end) = self.parse_factor()?;
+
+        while let Some(Ok(t)) = self.tokens.peek() {
+            let op = match t.kind {
+                TokenKind::Plus => BinaryOp::Add,
+                TokenKind::Minus => BinaryOp::Subtract,
+                _ => break,
+            };
+            let op_token = self.advance();
+
+            match self.parse_factor() {
+                Some((right, right_end)) => {
+                    let span = Span {
+                        start: left.span().start,
+                        end: right_end,
+                    };
+                    left = Expr::Binary {
+                        id: self.next_id(),
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                        span,
+                    };
+                    end = right_end;
+                }
+                None => {
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression after arithmetic operator".to_string(),
+                        span: op_token.span,
+                    });
+                    return None;
+                }
+            }
+        }
+
+        Some((left, end))
+    }
+
+    /// Parse factor: unary ( ( "*" | "/" | "%" ) unary )*
+    fn parse_factor(&mut self) -> Option<(Expr, usize)> {
+        let (mut left, mut end) = self.parse_unary()?;
+
+        while let Some(Ok(t)) = self.tokens.peek() {
+            let op = match t.kind {
+                TokenKind::Star => BinaryOp::Multiply,
+                TokenKind::Slash => BinaryOp::Divide,
+                TokenKind::Percent => BinaryOp::Modulo,
+                _ => break,
+            };
+            let op_token = self.advance();
+
+            match self.parse_unary() {
+                Some((right, right_end)) => {
+                    let span = Span {
+                        start: left.span().start,
+                        end: right_end,
+                    };
+                    left = Expr::Binary {
+                        id: self.next_id(),
+                        left: Box::new(left),
+                        op,
+                        right: Box::new(right),
+                        span,
+                    };
+                    end = right_end;
+                }
+                None => {
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression after arithmetic operator".to_string(),
+                        span: op_token.span,
+                    });
+                    return None;
+                }
+            }
+        }
+
+        Some((left, end))
+    }
+
+    /// Parse unary: ( "-" )* primary
+    /// Unary is right-recursive for right associativity (--x parses as -(-x))
+    fn parse_unary(&mut self) -> Option<(Expr, usize)> {
+        if let Some(Ok(t)) = self.tokens.peek() {
+            if t.kind == TokenKind::Minus {
                 let op_token = self.advance();
-                let op = match op_token.kind {
-                    TokenKind::EqualEqual => BinaryOp::Equal,
-                    TokenKind::BangEqual => BinaryOp::NotEqual,
-                    TokenKind::Less => BinaryOp::Less,
-                    TokenKind::LessEqual => BinaryOp::LessEqual,
-                    TokenKind::Greater => BinaryOp::Greater,
-                    TokenKind::GreaterEqual => BinaryOp::GreaterEqual,
-                    _ => unreachable!(),
+                let (expr, end) = self.parse_unary()?;
+                let span = Span {
+                    start: op_token.span.start,
+                    end,
                 };
+                return Some((
+                    Expr::Unary {
+                        id: self.next_id(),
+                        op: UnaryOp::Negate,
+                        expr: Box::new(expr),
+                        span,
+                    },
+                    end,
+                ));
+            }
+        }
+        self.parse_primary()
+    }
 
-                // Parse right operand
-                match self.parse_expr_primary() {
-                    Some((right, right_end)) => {
-                        let span = Span {
-                            start,
-                            end: right_end,
-                        };
-                        Some((
-                            Expr::Binary {
-                                id: self.next_id(),
-                                left: Box::new(left),
-                                op,
-                                right: Box::new(right),
-                                span,
-                            },
-                            span,
-                        ))
-                    }
-                    None => {
+    /// Parse primary: identifier | literal | "(" expression ")"
+    fn parse_primary(&mut self) -> Option<(Expr, usize)> {
+        match self.tokens.peek() {
+            Some(Ok(t)) => match t.kind {
+                // Parenthesized expression
+                TokenKind::OpenParen => {
+                    self.advance(); // consume '('
+                    let (expr, _) = self.parse_equality()?;
+                    if self.check(TokenKind::CloseParen) {
+                        let close = self.advance();
+                        Some((expr, close.span.end))
+                    } else {
+                        let span = self.current_span();
                         self.errors.push(ParseError::Syntax {
-                            message: "Expected expression after comparison operator".to_string(),
-                            span: op_token.span,
+                            message: "Expected ')' after expression".to_string(),
+                            span,
                         });
                         None
                     }
                 }
-            }
-            _ => {
-                // Just a simple expression (variable or literal)
-                let span = Span {
-                    start,
-                    end: left_end,
-                };
-                Some((left, span))
-            }
-        }
-    }
-
-    /// Parse a primary expression: variable reference or literal value.
-    /// Returns the expression and the span end position.
-    fn parse_expr_primary(&mut self) -> Option<(Expr, usize)> {
-        match self.tokens.peek() {
-            Some(Ok(t)) => match t.kind {
                 TokenKind::Identifier => {
                     let token = self.advance();
                     Some((
@@ -735,7 +878,8 @@ mod tests {
     fn parse_equality_with_negative_number() {
         let parts = get_text_parts("{x == -5}");
         if let TextPart::Expr { expr: Expr::Binary { right, .. }, .. } = &parts[0] {
-            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::Number(_), .. }));
+            // -5 is now parsed as Unary(Negate, Literal(5)), not Literal(-5)
+            assert!(matches!(right.as_ref(), Expr::Unary { op: UnaryOp::Negate, .. }));
         } else {
             panic!("Expected Binary expression");
         }
@@ -811,8 +955,128 @@ mod tests {
     }
 
     #[test]
-    fn parse_error_unexpected_after_var() {
-        let result = parse_source("{x + y}");
+    fn parse_arithmetic_addition() {
+        let parts = get_text_parts("{x + y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Add, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_arithmetic_subtraction() {
+        let parts = get_text_parts("{x - y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Subtract, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_arithmetic_multiplication() {
+        let parts = get_text_parts("{x * y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Multiply, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_arithmetic_division() {
+        let parts = get_text_parts("{x / y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Divide, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_arithmetic_modulo() {
+        let parts = get_text_parts("{x % y}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Modulo, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_unary_negation() {
+        let parts = get_text_parts("{-x}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Unary { op: UnaryOp::Negate, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_parenthesized_expression() {
+        let parts = get_text_parts("{(x + y)}");
+        assert!(matches!(
+            &parts[0],
+            TextPart::Expr {
+                expr: Expr::Binary { op: BinaryOp::Add, .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parse_precedence_mul_over_add() {
+        // 2 + 3 * 4 should parse as 2 + (3 * 4)
+        let parts = get_text_parts("{2 + 3 * 4}");
+        if let TextPart::Expr { expr: Expr::Binary { left, op, right, .. }, .. } = &parts[0] {
+            assert_eq!(*op, BinaryOp::Add);
+            // Left should be literal 2
+            assert!(matches!(left.as_ref(), Expr::Literal { value: Literal::Number(n), .. } if *n == 2.0));
+            // Right should be 3 * 4
+            assert!(matches!(right.as_ref(), Expr::Binary { op: BinaryOp::Multiply, .. }));
+        } else {
+            panic!("Expected Binary expression");
+        }
+    }
+
+    #[test]
+    fn parse_parentheses_override_precedence() {
+        // (2 + 3) * 4 should parse as (2 + 3) * 4
+        let parts = get_text_parts("{(2 + 3) * 4}");
+        if let TextPart::Expr { expr: Expr::Binary { left, op, right, .. }, .. } = &parts[0] {
+            assert_eq!(*op, BinaryOp::Multiply);
+            // Left should be 2 + 3
+            assert!(matches!(left.as_ref(), Expr::Binary { op: BinaryOp::Add, .. }));
+            // Right should be literal 4
+            assert!(matches!(right.as_ref(), Expr::Literal { value: Literal::Number(n), .. } if *n == 4.0));
+        } else {
+            panic!("Expected Binary expression");
+        }
+    }
+
+    #[test]
+    fn parse_error_unclosed_parenthesis() {
+        let result = parse_source("{(x + y}");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_error_missing_right_operand_add() {
+        let result = parse_source("{x +}");
         assert!(result.is_err());
     }
 }

@@ -1,0 +1,2 @@
+temp s = "hello"
+{s + 1}

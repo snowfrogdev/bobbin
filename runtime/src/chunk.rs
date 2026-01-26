@@ -55,6 +55,18 @@ pub enum Instruction {
     Greater,
     /// Pop two values (numbers), push true if first >= second.
     GreaterEqual,
+    /// Pop two values (numbers), push their sum.
+    Add,
+    /// Pop two values (numbers), push their difference (first - second).
+    Subtract,
+    /// Pop two values (numbers), push their product.
+    Multiply,
+    /// Pop two values (numbers), push their quotient. Errors on division by zero.
+    Divide,
+    /// Pop two values (numbers), push the remainder. Errors on modulo by zero.
+    Modulo,
+    /// Pop one value (number), push its negation.
+    Negate,
     Return,
 }
 
@@ -79,6 +91,15 @@ impl Value {
                 }
             }
             Value::Bool(b) => if *b { "true" } else { "false" }.to_string(),
+        }
+    }
+
+    /// Get the type name for error messages.
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Value::String(_) => "string",
+            Value::Number(_) => "number",
+            Value::Bool(_) => "bool",
         }
     }
 }

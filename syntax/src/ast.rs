@@ -48,12 +48,25 @@ pub enum Literal {
 /// Binary operator for expressions
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BinaryOp {
+    // Comparison operators
     Equal,        // ==
     NotEqual,     // !=
     Less,         // <
     LessEqual,    // <=
     Greater,      // >
     GreaterEqual, // >=
+    // Arithmetic operators
+    Add,          // +
+    Subtract,     // -
+    Multiply,     // *
+    Divide,       // /
+    Modulo,       // %
+}
+
+/// Unary operator for expressions
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Negate, // -x
 }
 
 /// A general expression that can be evaluated to produce a value.
@@ -61,14 +74,22 @@ pub enum BinaryOp {
 /// This is the foundation for the expression system. Currently supports:
 /// - Literals (numbers, strings, booleans)
 /// - Variable references
-/// - Binary comparisons (==, !=, <, <=, >, >=)
+/// - Unary operations (negation)
+/// - Binary operations (comparisons, arithmetic)
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// A literal value (number, string, boolean)
     Literal { value: Literal, span: Span },
     /// A reference to a variable
     VarRef { id: NodeId, name: String, span: Span },
-    /// A binary operation (currently comparisons only)
+    /// A unary operation (e.g., negation)
+    Unary {
+        id: NodeId,
+        op: UnaryOp,
+        expr: Box<Expr>,
+        span: Span,
+    },
+    /// A binary operation (comparisons and arithmetic)
     Binary {
         id: NodeId,
         left: Box<Expr>,
@@ -84,6 +105,7 @@ impl Expr {
         match self {
             Expr::Literal { span, .. } => *span,
             Expr::VarRef { span, .. } => *span,
+            Expr::Unary { span, .. } => *span,
             Expr::Binary { span, .. } => *span,
         }
     }

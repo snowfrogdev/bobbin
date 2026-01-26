@@ -1,5 +1,5 @@
 use bobbin_syntax::{
-    BinaryOp, Expr, Literal, NodeId, Script, Stmt, SymbolTable, TextPart, VarBindingData,
+    BinaryOp, Expr, Literal, NodeId, Script, Stmt, SymbolTable, TextPart, UnaryOp, VarBindingData,
 };
 
 use crate::chunk::{Chunk, Instruction, Value};
@@ -245,14 +245,31 @@ impl<'a> Compiler<'a> {
                 self.compile_expr(left);
                 // Compile right operand
                 self.compile_expr(right);
-                // Emit comparison instruction
+                // Emit operator instruction
                 match op {
+                    // Comparison operators
                     BinaryOp::Equal => self.chunk.emit(Instruction::Equal, span.start),
                     BinaryOp::NotEqual => self.chunk.emit(Instruction::NotEqual, span.start),
                     BinaryOp::Less => self.chunk.emit(Instruction::Less, span.start),
                     BinaryOp::LessEqual => self.chunk.emit(Instruction::LessEqual, span.start),
                     BinaryOp::Greater => self.chunk.emit(Instruction::Greater, span.start),
-                    BinaryOp::GreaterEqual => self.chunk.emit(Instruction::GreaterEqual, span.start),
+                    BinaryOp::GreaterEqual => {
+                        self.chunk.emit(Instruction::GreaterEqual, span.start)
+                    }
+                    // Arithmetic operators
+                    BinaryOp::Add => self.chunk.emit(Instruction::Add, span.start),
+                    BinaryOp::Subtract => self.chunk.emit(Instruction::Subtract, span.start),
+                    BinaryOp::Multiply => self.chunk.emit(Instruction::Multiply, span.start),
+                    BinaryOp::Divide => self.chunk.emit(Instruction::Divide, span.start),
+                    BinaryOp::Modulo => self.chunk.emit(Instruction::Modulo, span.start),
+                }
+            }
+            Expr::Unary { op, expr, span, .. } => {
+                // Compile the operand
+                self.compile_expr(expr);
+                // Emit unary operator instruction
+                match op {
+                    UnaryOp::Negate => self.chunk.emit(Instruction::Negate, span.start),
                 }
             }
         }

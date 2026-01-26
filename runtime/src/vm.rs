@@ -15,6 +15,10 @@ pub enum RuntimeError {
     MissingSaveVariable { name: String },
     /// Extern variable not found in host state
     MissingExternVariable { name: String },
+    /// Division or modulo by zero
+    DivisionByZero,
+    /// Type mismatch at runtime (semantic analysis should prevent this, but fail explicitly)
+    TypeMismatch { expected: &'static str, got: &'static str },
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -38,6 +42,12 @@ impl std::fmt::Display for RuntimeError {
             }
             RuntimeError::MissingExternVariable { name } => {
                 write!(f, "extern variable '{}' not found in host state", name)
+            }
+            RuntimeError::DivisionByZero => {
+                write!(f, "division by zero")
+            }
+            RuntimeError::TypeMismatch { expected, got } => {
+                write!(f, "type mismatch: expected {}, got {}", expected, got)
             }
         }
     }
@@ -85,6 +95,20 @@ impl IntoDiagnostic for RuntimeError {
                     "The host game must provide this variable before running the script".to_string(),
                     "Check that your game's HostState implementation returns a value for this variable".to_string(),
                 ],
+                suggestions: vec![],
+            },
+            RuntimeError::DivisionByZero => Diagnostic {
+                severity: Severity::Error,
+                message: "division by zero".to_string(),
+                labels: vec![],
+                notes: vec!["Division and modulo operations require a non-zero divisor".to_string()],
+                suggestions: vec![],
+            },
+            RuntimeError::TypeMismatch { expected, got } => Diagnostic {
+                severity: Severity::Error,
+                message: format!("type mismatch: expected {}, got {}", expected, got),
+                labels: vec![],
+                notes: vec!["This is likely a compiler bug - semantic analysis should have caught this".to_string()],
                 suggestions: vec![],
             },
         }
@@ -263,6 +287,55 @@ impl VM {
                         _ => false,
                     };
                     self.stack.push(Value::Bool(result));
+                }
+                Instruction::Add
+                | Instruction::Subtract
+                | Instruction::Multiply
+                | Instruction::Divide
+                | Instruction::Modulo => {
+                    let b = self.stack.pop().expect("stack underflow: compiler bug");
+                    let a = self.stack.pop().expect("stack underflow: compiler bug");
+
+                    let result = match (&a, &b) {
+                        (Value::Number(a_num), Value::Number(b_num)) => match instruction {
+                            Instruction::Add => Ok(*a_num + *b_num),
+                            Instruction::Subtract => Ok(*a_num - *b_num),
+                            Instruction::Multiply => Ok(*a_num * *b_num),
+                            Instruction::Divide => {
+                                if *b_num == 0.0 {
+                                    return Err(RuntimeError::DivisionByZero);
+                                }
+                                Ok(*a_num / *b_num)
+                            }
+                            Instruction::Modulo => {
+                                if *b_num == 0.0 {
+                                    return Err(RuntimeError::DivisionByZero);
+                                }
+                                Ok(*a_num % *b_num)
+                            }
+                            _ => unreachable!(),
+                        },
+                        // Type mismatch: semantic analysis should prevent this, but fail explicitly
+                        _ => {
+                            return Err(RuntimeError::TypeMismatch {
+                                expected: "number",
+                                got: a.type_name(),
+                            });
+                        }
+                    }?;
+                    self.stack.push(Value::Number(result));
+                }
+                Instruction::Negate => {
+                    let value = self.stack.pop().expect("stack underflow: compiler bug");
+                    match value {
+                        Value::Number(n) => self.stack.push(Value::Number(-n)),
+                        _ => {
+                            return Err(RuntimeError::TypeMismatch {
+                                expected: "number",
+                                got: value.type_name(),
+                            });
+                        }
+                    }
                 }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK

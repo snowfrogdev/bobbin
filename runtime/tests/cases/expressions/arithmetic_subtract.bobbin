@@ -1,0 +1,3 @@
+temp a = 10
+temp b = 4
+{a - b}

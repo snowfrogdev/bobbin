@@ -1,0 +1,3 @@
+temp a = 20
+temp b = 4
+{a / b}

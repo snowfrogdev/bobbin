@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{BinaryOp, Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, VarBindingData};
+use crate::ast::{BinaryOp, Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp, VarBindingData};
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::token::Span;
 
@@ -58,6 +58,18 @@ pub enum SemanticError {
     ComparisonRequiresNumber {
         op: String,
         operand_desc: String,
+        operand_type: ValueType,
+        span: Span,
+    },
+    /// Arithmetic operators (+, -, *, /, %) require numeric operands
+    ArithmeticRequiresNumber {
+        op: BinaryOp,
+        operand_type: ValueType,
+        span: Span,
+    },
+    /// Unary operators (negation) require numeric operands
+    UnaryRequiresNumber {
+        op: UnaryOp,
         operand_type: ValueType,
         span: Span,
     },
@@ -138,6 +150,38 @@ impl IntoDiagnostic for SemanticError {
             )
             .with_note("Comparison operators (<, >, <=, >=) only work with numbers")
             .with_note("Use == or != to compare strings and booleans"),
+            SemanticError::ArithmeticRequiresNumber {
+                op,
+                operand_type,
+                span,
+            } => {
+                let op_str = Resolver::op_to_string(op);
+                Diagnostic::error(
+                    format!(
+                        "operator '{}' requires numeric operands, got {}",
+                        op_str,
+                        operand_type.name()
+                    ),
+                    span,
+                    format!("expected number, got {}", operand_type.name()),
+                )
+                .with_note("Arithmetic operators (+, -, *, /, %) only work with numbers")
+            }
+            SemanticError::UnaryRequiresNumber { op, operand_type, span } => {
+                let op_str = match op {
+                    UnaryOp::Negate => "-",
+                };
+                Diagnostic::error(
+                    format!(
+                        "operator '{}' requires numeric operand, got {}",
+                        op_str,
+                        operand_type.name()
+                    ),
+                    span,
+                    format!("expected number, got {}", operand_type.name()),
+                )
+                .with_note("Negation operator only works with numbers")
+            }
         }
     }
 }
@@ -359,6 +403,10 @@ impl<'a> Resolver<'a> {
             Expr::VarRef { id, name, span } => {
                 self.resolve_reference(*id, name, *span, false);
             }
+            Expr::Unary { op, expr: inner, span, .. } => {
+                self.resolve_expr(inner);
+                self.check_unary_type(inner, *op, *span);
+            }
             Expr::Binary { left, right, op, span, .. } => {
                 self.resolve_expr(left);
                 self.resolve_expr(right);
@@ -373,7 +421,22 @@ impl<'a> Resolver<'a> {
         match expr {
             Expr::Literal { value, .. } => Some(ValueType::from_literal(value)),
             Expr::VarRef { name, .. } => self.lookup_type(name),
-            Expr::Binary { .. } => Some(ValueType::Bool), // Comparisons always return bool
+            Expr::Unary { op: UnaryOp::Negate, .. } => Some(ValueType::Number),
+            Expr::Binary { op, .. } => match op {
+                // Comparison operators return Bool
+                BinaryOp::Equal
+                | BinaryOp::NotEqual
+                | BinaryOp::Less
+                | BinaryOp::LessEqual
+                | BinaryOp::Greater
+                | BinaryOp::GreaterEqual => Some(ValueType::Bool),
+                // Arithmetic operators return Number
+                BinaryOp::Add
+                | BinaryOp::Subtract
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Modulo => Some(ValueType::Number),
+            },
         }
     }
 
@@ -394,6 +457,32 @@ impl<'a> Resolver<'a> {
             Some(t) => t,
             None => return, // Extern or undefined - skip type checking
         };
+
+        // Arithmetic operators (+, -, *, /, %) require numbers
+        if matches!(
+            op,
+            BinaryOp::Add
+                | BinaryOp::Subtract
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Modulo
+        ) {
+            if left_type != ValueType::Number {
+                self.errors.push(SemanticError::ArithmeticRequiresNumber {
+                    op,
+                    operand_type: left_type,
+                    span: left.span(),
+                });
+            }
+            if right_type != ValueType::Number {
+                self.errors.push(SemanticError::ArithmeticRequiresNumber {
+                    op,
+                    operand_type: right_type,
+                    span: right.span(),
+                });
+            }
+            return;
+        }
 
         // Ordering comparisons (<, >, <=, >=) require numbers
         if matches!(
@@ -441,6 +530,11 @@ impl<'a> Resolver<'a> {
             BinaryOp::LessEqual => "<=".to_string(),
             BinaryOp::Greater => ">".to_string(),
             BinaryOp::GreaterEqual => ">=".to_string(),
+            BinaryOp::Add => "+".to_string(),
+            BinaryOp::Subtract => "-".to_string(),
+            BinaryOp::Multiply => "*".to_string(),
+            BinaryOp::Divide => "/".to_string(),
+            BinaryOp::Modulo => "%".to_string(),
         }
     }
 
@@ -450,7 +544,40 @@ impl<'a> Resolver<'a> {
         match expr {
             Expr::Literal { value, .. } => format!("literal {:?}", value),
             Expr::VarRef { name, .. } => name.clone(),
-            Expr::Binary { .. } => "comparison".to_string(),
+            Expr::Unary { .. } => "unary expression".to_string(),
+            Expr::Binary { op, .. } => match op {
+                BinaryOp::Equal
+                | BinaryOp::NotEqual
+                | BinaryOp::Less
+                | BinaryOp::LessEqual
+                | BinaryOp::Greater
+                | BinaryOp::GreaterEqual => "comparison".to_string(),
+                BinaryOp::Add
+                | BinaryOp::Subtract
+                | BinaryOp::Multiply
+                | BinaryOp::Divide
+                | BinaryOp::Modulo => "arithmetic expression".to_string(),
+            },
+        }
+    }
+
+    /// Check that a unary operator has a compatible operand type.
+    fn check_unary_type(&mut self, expr: &crate::ast::Expr, op: UnaryOp, span: Span) {
+        let operand_type = match self.expr_type(expr) {
+            Some(t) => t,
+            None => return, // Extern or undefined - skip type checking
+        };
+
+        match op {
+            UnaryOp::Negate => {
+                if operand_type != ValueType::Number {
+                    self.errors.push(SemanticError::UnaryRequiresNumber {
+                        op,
+                        operand_type,
+                        span,
+                    });
+                }
+            }
         }
     }
 

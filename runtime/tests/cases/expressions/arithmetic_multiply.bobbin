@@ -1,0 +1,3 @@
+temp a = 6
+temp b = 7
+{a * b}

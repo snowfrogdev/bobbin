@@ -1,0 +1,3 @@
+temp a = 17
+temp b = 5
+{a % b}

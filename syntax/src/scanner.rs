@@ -348,6 +348,44 @@ impl<'a> Scanner<'a> {
             return Ok(self.make_token(TokenKind::Greater));
         }
 
+        // Arithmetic operators
+        if current_char == '+' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Plus));
+        }
+
+        // Minus operator - always emit as token, parser handles unary vs binary
+        if current_char == '-' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Minus));
+        }
+
+        if current_char == '*' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Star));
+        }
+
+        if current_char == '/' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Slash));
+        }
+
+        if current_char == '%' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Percent));
+        }
+
+        // Parentheses for grouping
+        if current_char == '(' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::OpenParen));
+        }
+
+        if current_char == ')' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::CloseParen));
+        }
+
         // Reject lone = with helpful error
         if current_char == '=' {
             self.advance();
@@ -365,10 +403,8 @@ impl<'a> Scanner<'a> {
             return self.scan_string();
         }
 
-        // Number literal (including negative)
-        if current_char.is_ascii_digit()
-            || (current_char == '-' && self.peek_next().is_some_and(|n| n.is_ascii_digit()))
-        {
+        // Number literal (positive only - minus is handled as operator above)
+        if current_char.is_ascii_digit() {
             return self.scan_number();
         }
 

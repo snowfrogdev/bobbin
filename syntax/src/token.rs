@@ -28,6 +28,13 @@ pub enum TokenKind {
     LessEqual,    // <=
     Greater,      // >
     GreaterEqual, // >=
+    Plus,         // +
+    Minus,        // -
+    Star,         // *
+    Slash,        // /
+    Percent,      // %
+    OpenParen,    // (
+    CloseParen,   // )
     OpenBrace,
     CloseBrace,
 

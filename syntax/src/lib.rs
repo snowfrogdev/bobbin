@@ -17,7 +17,7 @@ pub mod scanner;
 pub mod token;
 
 pub use ast::{
-    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart,
+    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp,
     VarBindingData,
 };
 pub use diagnostic::{
