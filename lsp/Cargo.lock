@@ -48,7 +48,7 @@ checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
 name = "bobbin-lsp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bobbin-syntax",
  "tokio",
@@ -57,7 +57,7 @@ dependencies = [
 
 [[package]]
 name = "bobbin-syntax"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "ariadne",
  "strsim",
