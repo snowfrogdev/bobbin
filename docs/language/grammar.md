@@ -17,12 +17,12 @@ choice      = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
 ## Lexical Grammar
 
 ```ebnf
-SAVE    = "save" , " " , identifier , " " , "=" , " " , literal ;
-TEMP    = "temp" , " " , identifier , " " , "=" , " " , literal ;
-EXTERN  = "extern" , " " , identifier ;
-SET     = "set" , " " , identifier , " " , "=" , " " , literal ;
+SAVE    = "save" , identifier , "=" , literal ;
+TEMP    = "temp" , identifier , "=" , literal ;
+EXTERN  = "extern" , identifier ;
+SET     = "set" , identifier , "=" , literal ;
 LINE    = text ;                         (* line not starting with "- ", "save ", "temp ", "extern ", or "set " *)
-CHOICE  = "-" , " " , text ;             (* line starting with "- " *)
+CHOICE  = "-" , text ;                   (* line starting with "- " *)
 NEWLINE = "\n" | "\r\n" | "\r" ;
 INDENT  = ? increase in indentation level ? ;
 DEDENT  = ? decrease in indentation level ? ;
@@ -40,10 +40,13 @@ digit  = "0" | ... | "9" ;
 text          = { text_segment }+ ;
 text_segment  = text_char | interpolation | escaped_brace ;
 interpolation = "{" , expression , "}" ;
-expression    = comparison ;
-comparison    = primary , [ compare_op , primary ] ;
-primary       = identifier | literal ;
-compare_op    = "==" | "!=" | "<" | "<=" | ">" | ">=" ;
+expression    = equality ;
+equality      = comparison , { ( "==" | "!=" ) , comparison } ;
+comparison    = term , { ( "<" | "<=" | ">" | ">=" ) , term } ;
+term          = factor , { ( "+" | "-" ) , factor } ;
+factor        = unary , { ( "*" | "/" | "%" ) , unary } ;
+unary         = "-" , unary | primary ;
+primary       = identifier | literal | "(" , expression , ")" ;
 escaped_brace = "{{" | "}}" ;
 text_char     = ? any character except "{", "}", and newline ? ;
 ```
@@ -55,6 +58,17 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - Blank lines are skipped at the lexical level
 - Statements execute sequentially; nested statements complete before their parent continues
 - Statements are recursive: choices can contain any statements, including other choice sets
+- Whitespace between tokens is handled by the scanner; the lexical grammar shows logical structure only
+
+### String Literals
+
+String literals support these escape sequences:
+
+- `\n` - newline
+- `\t` - tab
+- `\r` - carriage return
+- `\"` - double quote
+- `\\` - backslash
 
 ### Variable Declarations (`save` and `temp`)
 
@@ -101,6 +115,18 @@ text_char     = ? any character except "{", "}", and newline ? ;
 - Lines and choice text may contain interpolations: `{expression}`
 - Use `{{` for a literal `{` character, `}}` for a literal `}`
 - **Simple interpolation**: `{variable_name}` displays the variable's value
+- **Arithmetic expressions**: `{x + y}`, `{x - y}`, `{x * y}`, `{x / y}`, `{x % y}`
+  - Both operands must be **numbers** (strings and booleans are not allowed)
+  - Division and modulo by zero produce a runtime error
+  - Unary negation: `{-x}` negates a numeric value
+  - Parentheses for grouping: `{(a + b) * c}`
+- **Operator precedence** (lowest to highest):
+  1. `==`, `!=` (equality)
+  2. `<`, `<=`, `>`, `>=` (comparison)
+  3. `+`, `-` (addition, subtraction)
+  4. `*`, `/`, `%` (multiplication, division, modulo)
+  5. Unary `-` (negation)
+  6. `()` (parentheses)
 - **Equality expressions**: `{x == y}` and `{x != y}`
   - Both operands can be variables or literals (symmetric expressions)
   - Supported forms: `{var == var}`, `{var == literal}`, `{literal == var}`, `{literal == literal}`
@@ -112,19 +138,22 @@ text_char     = ? any character except "{", "}", and newline ? ;
   - Comparing non-numeric types is a semantic error
 - Examples:
   - `Welcome, {player_name}! You have {gold} gold.`
+  - `Damage dealt: {base_damage * multiplier}`
+  - `Gold after purchase: {gold - 100}` or `Double damage: {damage * 2}`
+  - `Remainder: {count % 3}` or `Negated: {-score}`
   - `Is ready: {count == 10}` or `Different names: {name != "Bob"}`
   - `Is ten: {10 == count}` (literal on left side)
   - `Always true: {true == true}` (literal-to-literal comparison)
   - `Low health: {health < 10}` or `Enough gold: {gold >= 100}`
+  - `Combined: {(2 + 3) * 4}` → `20`
 
 ## Future Syntax (TBD)
 
 The following syntax elements are planned but not yet specified:
 
 - **Compound assignment operators**: `+=`, `-=`, `*=`, `/=`
-- **Expressions**: Arithmetic and logical operators (comparison operators `==`, `!=`, `<`, `<=`, `>`, `>=` are implemented)
+- **Logical operators**: `and`/`or`/`not` (or `&&`/`||`/`!`)
 - **Conditionals**: `if`/`else` structure
 - **Tables**: Literal syntax, access syntax, methods
-- **Parentheses in expressions**: `{(a == b) == true}` for grouping
 - **Imports**: Module system syntax
 - **Commands**: Syntax for triggering game effects (giving items, playing sounds, etc.)

@@ -155,7 +155,28 @@ To show braces: {{like this}}
 - `${var}` (JavaScript style) - more verbose; `$` might conflict with variable prefixes
 - `$var` (naked sigil) - ambiguous boundaries (`$goldfish`?)
 
-**Phase 1 scope**: Only variable names are allowed inside `{...}`. Arithmetic expressions and function calls are TBD for a future phase.
+**Current scope**: Variable names and comparison expressions are supported inside `{...}`. Arithmetic expressions and function calls are TBD for a future phase.
+
+**Comparison expressions** (implemented):
+
+- Equality: `{x == y}`, `{x != y}` - works on any same-typed values
+- Ordering: `{x < y}`, `{x <= y}`, `{x > y}`, `{x >= y}` - numbers only
+
+**Arithmetic expressions** (implemented):
+
+- Binary: `{x + y}`, `{x - y}`, `{x * y}`, `{x / y}`, `{x % y}` - numbers only
+- Unary: `{-x}` for negation
+- Parentheses: `{(a + b) * c}` for grouping
+- Division/modulo by zero produces a runtime error
+
+**Operator precedence** (lowest to highest):
+
+1. `==`, `!=` (equality)
+2. `<`, `<=`, `>`, `>=` (comparison)
+3. `+`, `-` (addition, subtraction)
+4. `*`, `/`, `%` (multiplication, division, modulo)
+5. Unary `-` (negation)
+6. `()` (parentheses)
 
 ## To Be Decided
 
@@ -163,10 +184,17 @@ The following design decisions need to be made before implementation:
 
 ### Expression Syntax
 
-**Questions**:
-- Operator symbols: `and`/`or`/`not` vs `&&`/`||`/`!`?
-- Operator precedence?
-- Parentheses for grouping?
+**Implemented**:
+
+- Comparison operators: `==`, `!=`, `<`, `<=`, `>`, `>=`
+- Arithmetic operators: `+`, `-`, `*`, `/`, `%`
+- Unary negation: `-x`
+- Parentheses for grouping: `(a + b) * c`
+- Operator precedence (standard mathematical order)
+
+**Remaining questions**:
+
+- Logical operator symbols: `and`/`or`/`not` vs `&&`/`||`/`!`?
 - String concatenation operator?
 
 ### Conditional Syntax
@@ -187,14 +215,19 @@ The following design decisions need to be made before implementation:
 
 ### Interpolation Expressions
 
-**Questions**:
+**Implemented**:
 
-- What expressions beyond variable names should be allowed inside `{...}`?
-- Arithmetic: `{gold * 2}`?
+- Comparison operators: `{x == y}`, `{x != y}`, `{x < y}`, `{x <= y}`, `{x > y}`, `{x >= y}`
+- Arithmetic operators: `{x + y}`, `{x - y}`, `{x * y}`, `{x / y}`, `{x % y}`
+- Unary negation: `{-x}`
+- Parentheses for grouping: `{(a + b) * c}`
+
+**Remaining questions**:
+
 - Function calls: `{get_title(npc)}`?
 - Inline conditionals: `{if gold > 0 then "some" else "no"}`?
 
-Note: Basic interpolation syntax (`{var}` and `{{` escape) is decided - see "Decided" section above.
+Note: Basic interpolation syntax (`{var}` and `{{` escape), comparison expressions, and arithmetic expressions are decided - see "Decided" section above.
 
 ### Compound Assignment
 
