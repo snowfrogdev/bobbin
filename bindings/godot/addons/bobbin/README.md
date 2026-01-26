@@ -13,15 +13,26 @@ temp mood = "friendly"
 
 # Host variable (provided by your game)
 extern player_name
+extern gold
 
 Hello, {player_name}!
 
 - Ask about wares
     set met_merchant = true
     I have potions and scrolls.
+    - Buy potion (10 gold)
+        if gold >= 10
+            You purchase the potion.
+        else
+            You can't afford that.
+    - Never mind
+        Come back anytime.
 
 - Leave
-    Safe travels!
+    if met_merchant
+        Safe travels, friend!
+    else
+        Goodbye, stranger.
 ```
 
 ## Using in Godot

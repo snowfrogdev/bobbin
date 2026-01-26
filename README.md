@@ -26,8 +26,8 @@
 
 ```bobbin
 extern player_name
+extern gold
 save met_merchant = false
-temp discount = 0
 
 Welcome to the Brass Lantern, {player_name}!
 
@@ -35,10 +35,14 @@ Welcome to the Brass Lantern, {player_name}!
     set met_merchant = true
     The merchant spreads out their goods.
     - Buy healing potion (10 gold)
-        temp price = 10
-        set discount = 2
-        You hand over {price} gold coins.
-        Here's a little something extra for a first-time customer.
+        if gold >= 10
+            temp price = 10
+            You hand over {price} gold coins.
+            if met_merchant
+                Here's a 2 gold discount for a returning customer!
+                Actually, you only owe {price - 2} gold.
+        else
+            You don't have enough gold.
     - Just looking
         No problem, take your time.
     Come back anytime!
@@ -47,7 +51,7 @@ Welcome to the Brass Lantern, {player_name}!
     The merchant leans in close...
     Heard there's treasure in the old ruins.
 
-Farewell, {player_name}. Your discount: {discount} gold.
+Farewell, {player_name}! You have {gold} gold remaining.
 ```
 
 ## Features
@@ -55,7 +59,9 @@ Farewell, {player_name}. Your discount: {discount} gold.
 - **Writer-friendly syntax** — No boilerplate, just dialogue and choices
 - **Smart variable scoping** — `save` persists across sessions, `temp` lives for the scene, `extern` reads from your game
 - **Nested branching** — Unlimited nesting depth with automatic gather points
-- **String interpolation** — Embed variables directly in dialogue with `{variable}`
+- **Conditional logic** — `if`/`elseif`/`else` with full expression support
+- **Expressions everywhere** — Arithmetic, comparison, and logical operators in assignments and interpolations
+- **String interpolation** — Embed variables and expressions in dialogue with `{variable}` or `{a + b}`
 - **Rich error messages** — Rust-quality diagnostics that point to exactly what went wrong
 - **Fast & lightweight** — Rust-powered runtime, instant parsing
 - **Cross-platform** — Linux, Windows, macOS, and WASM (web exports)
@@ -89,11 +95,10 @@ while runtime.has_more():
 
 ## What's Next
 
-- Conditional content display
 - Character/speaker management
 - Localization support
 - Event triggering/callbacks
-- Language Server Protocol (LSP) support for Godot and VSCode
+- Visit tracking for choices
 
 ## Contributing
 

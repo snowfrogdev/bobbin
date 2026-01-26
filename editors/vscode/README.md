@@ -10,8 +10,11 @@ Full syntax highlighting for `.bobbin` files including:
 
 - Variable declarations (`save`, `temp`, `extern`)
 - Assignments (`set`)
+- Conditionals (`if`, `elseif`, `else`)
+- Logical operators (`and`, `or`, `not`)
+- Comparison and arithmetic operators
 - Dialogue text and choices
-- String interpolations `{variable}`
+- String interpolations `{variable}` and `{expression}`
 - Comments
 
 ### Error Diagnostics
@@ -28,8 +31,9 @@ Real-time error detection powered by the Bobbin language server:
 Context-aware code completion:
 
 - Variable names (temp, save, extern)
-- Keywords (`save`, `temp`, `set`, `extern`)
+- Keywords (`save`, `temp`, `set`, `extern`, `if`, `elseif`, `else`)
 - Boolean literals (`true`, `false`)
+- Logical operators (`and`, `or`, `not`)
 - Smart filtering inside interpolations `{}`
 
 ## Example
@@ -40,11 +44,19 @@ temp greeted = false
 extern player_name
 
 Welcome, {player_name}!
-- Buy sword
-    set gold = gold - 50
-    You bought a sword.
+
+- Buy sword (50 gold)
+    if gold >= 50
+        set gold = gold - 50
+        You bought a sword! Gold remaining: {gold}
+    else
+        You can't afford that.
+
 - Leave
-    Goodbye!
+    if greeted
+        See you again!
+    else
+        Goodbye, stranger.
 ```
 
 ## Configuration

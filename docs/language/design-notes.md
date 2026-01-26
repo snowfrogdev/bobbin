@@ -12,11 +12,11 @@ Bobbin automatically tracks how many times each choice set has been visited. Thi
 
 Writers can query visit counts to vary dialogue:
 
-```
-# Syntax TBD, but conceptually:
-if tavern_choice.visits > 0:
+```bobbin
+# Visit tracking syntax TBD, but conceptually:
+if tavern_choice.visits > 0
     Welcome back to the tavern!
-else:
+else
     You enter a dimly lit tavern.
 ```
 
@@ -155,7 +155,7 @@ To show braces: {{like this}}
 - `${var}` (JavaScript style) - more verbose; `$` might conflict with variable prefixes
 - `$var` (naked sigil) - ambiguous boundaries (`$goldfish`?)
 
-**Current scope**: Variable names and comparison expressions are supported inside `{...}`. Arithmetic expressions and function calls are TBD for a future phase.
+**Current scope**: Variable names, comparison expressions, logical expressions, and arithmetic expressions are all supported inside `{...}`. Function calls are TBD for a future phase.
 
 **Comparison expressions** (implemented):
 
@@ -169,14 +169,63 @@ To show braces: {{like this}}
 - Parentheses: `{(a + b) * c}` for grouping
 - Division/modulo by zero produces a runtime error
 
+**Logical expressions** (implemented):
+
+- `and`, `or`, `not` — word-based operators for clarity in prose-heavy scripts
+- Short-circuit evaluation: `false and x` doesn't evaluate `x`
+- Can combine with comparisons: `{health > 0 and gold >= price}`
+
 **Operator precedence** (lowest to highest):
 
-1. `==`, `!=` (equality)
-2. `<`, `<=`, `>`, `>=` (comparison)
-3. `+`, `-` (addition, subtraction)
-4. `*`, `/`, `%` (multiplication, division, modulo)
-5. Unary `-` (negation)
-6. `()` (parentheses)
+1. `or` (logical or)
+2. `and` (logical and)
+3. `==`, `!=` (equality)
+4. `<`, `<=`, `>`, `>=` (comparison)
+5. `+`, `-` (addition, subtraction)
+6. `*`, `/`, `%` (multiplication, division, modulo)
+7. `not`, Unary `-` (logical not, negation)
+8. `()` (parentheses)
+
+### Conditional Syntax
+
+**Decision**: Python-style indentation-based blocks with `if`/`elseif`/`else`.
+
+```bobbin
+if gold >= 100
+    You can afford the premium item!
+elseif gold >= 50
+    You can afford the standard item.
+else
+    You need more gold.
+```
+
+**Syntax details:**
+
+- `if <expression>` — no parentheses required, no trailing colon
+- `elseif <expression>` — for additional conditions (not `elif`)
+- `else` — optional final branch
+- Indentation defines block scope (4 spaces recommended)
+- Conditions must evaluate to boolean
+
+**Interaction with choices:**
+
+Conditionals can contain choice sets, and choices can contain conditionals:
+
+```bobbin
+if show_inventory
+    - Check items
+        You have {item_count} items.
+    - Leave
+        Goodbye.
+else
+    The inventory is locked.
+```
+
+**Rationale:**
+
+- Indentation-based blocks match dialogue's natural structure
+- `elseif` is more readable in prose than `elif`
+- No colons/parentheses reduces visual noise
 
 ## To Be Decided
 
@@ -188,22 +237,14 @@ The following design decisions need to be made before implementation:
 
 - Comparison operators: `==`, `!=`, `<`, `<=`, `>`, `>=`
 - Arithmetic operators: `+`, `-`, `*`, `/`, `%`
+- Logical operators: `and`, `or`, `not`
 - Unary negation: `-x`
 - Parentheses for grouping: `(a + b) * c`
 - Operator precedence (standard mathematical order)
 
 **Remaining questions**:
 
-- Logical operator symbols: `and`/`or`/`not` vs `&&`/`||`/`!`?
 - String concatenation operator?
-
-### Conditional Syntax
-
-**Questions**:
-- `if`/`else` or `if`/`elif`/`else`?
-- Indentation-based blocks (Python-style)?
-- Condition syntax: `if condition:` or `if (condition)`?
-- How do conditionals interact with choices?
 
 ### Table Syntax
 
@@ -219,6 +260,7 @@ The following design decisions need to be made before implementation:
 
 - Comparison operators: `{x == y}`, `{x != y}`, `{x < y}`, `{x <= y}`, `{x > y}`, `{x >= y}`
 - Arithmetic operators: `{x + y}`, `{x - y}`, `{x * y}`, `{x / y}`, `{x % y}`
+- Logical operators: `{x and y}`, `{x or y}`, `{not x}`
 - Unary negation: `{-x}`
 - Parentheses for grouping: `{(a + b) * c}`
 
@@ -227,7 +269,7 @@ The following design decisions need to be made before implementation:
 - Function calls: `{get_title(npc)}`?
 - Inline conditionals: `{if gold > 0 then "some" else "no"}`?
 
-Note: Basic interpolation syntax (`{var}` and `{{` escape), comparison expressions, and arithmetic expressions are decided - see "Decided" section above.
+Note: Basic interpolation syntax (`{var}` and `{{` escape), comparison expressions, logical expressions, and arithmetic expressions are decided - see "Decided" section above.
 
 ### Compound Assignment
 
@@ -266,6 +308,9 @@ When implementing, the scanner should recognize these line prefixes:
 | `temp ` | TEMP | `temp y = 0` |
 | `extern ` | EXTERN | `extern player_health` |
 | `set ` | SET | `set x = 1` |
+| `if ` | IF | `if condition` |
+| `elseif ` | ELSEIF | `elseif other` |
+| `else` | ELSE | `else` |
 | `- ` | CHOICE | `- Option text` |
 | (other) | LINE | `Dialogue text` |
 

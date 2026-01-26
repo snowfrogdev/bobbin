@@ -84,6 +84,8 @@ Runtime tests live in `runtime/tests/` with this structure:
 
 - `basic.rs` — Simple dialogue tests
 - `choices.rs` — Choice/branching tests
+- `conditionals.rs` — Conditional (if/elseif/else) tests
+- `expressions.rs` — Expression operator tests
 - `variables.rs` — Variable and interpolation tests
 - `syntax.rs` — Syntax error tests
 - `support/` — Test utilities and runners
@@ -140,6 +142,7 @@ Format elements:
 - `! waiting_for_choice` — Assert `is_waiting_for_choice()` is true
 - `[advance]` — Call `advance()`
 - `[choice <n>]` — Call `select_choice(n)`
+- `[host <var> = <value>]` — Set extern variable before execution
 - `# comment` — Comment (ignored)
 
 **`.err`** — Substrings that must appear in error message (one per line, case-insensitive):
