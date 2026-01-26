@@ -1,0 +1,12 @@
+extern show_choices
+
+if show_choices
+    Pick an option:
+    - Option A
+        You chose A.
+    - Option B
+        You chose B.
+else
+    No choices available.
+
+After conditional.

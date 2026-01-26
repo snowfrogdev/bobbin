@@ -1,0 +1,35 @@
+# Test choice set inside if block with else clause
+
+--- path: option_a
+[host show_choices = true]
+> Pick an option:
+[advance]
+! waiting_for_choice
+? Option A | Option B
+[choice 0]
+> You chose A.
+[advance]
+> After conditional.
+[advance]
+! done
+
+--- path: option_b
+[host show_choices = true]
+> Pick an option:
+[advance]
+! waiting_for_choice
+? Option A | Option B
+[choice 1]
+> You chose B.
+[advance]
+> After conditional.
+[advance]
+! done
+
+--- path: else_branch
+[host show_choices = false]
+> No choices available.
+[advance]
+> After conditional.
+[advance]
+! done

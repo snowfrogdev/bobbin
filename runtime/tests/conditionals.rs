@@ -135,6 +135,30 @@ fn choice_in_if_second() {
     );
 }
 
+#[test]
+fn choice_in_if_with_else_option_a() {
+    support::run_trace_test(
+        &support::cases_dir().join("conditionals/choice_in_if_with_else.bobbin"),
+        "option_a",
+    );
+}
+
+#[test]
+fn choice_in_if_with_else_option_b() {
+    support::run_trace_test(
+        &support::cases_dir().join("conditionals/choice_in_if_with_else.bobbin"),
+        "option_b",
+    );
+}
+
+#[test]
+fn choice_in_if_with_else_else_branch() {
+    support::run_trace_test(
+        &support::cases_dir().join("conditionals/choice_in_if_with_else.bobbin"),
+        "else_branch",
+    );
+}
+
 // ============================================
 // Error Tests
 // ============================================
