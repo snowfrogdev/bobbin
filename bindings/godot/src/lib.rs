@@ -264,6 +264,26 @@ fn value_to_variant(v: &Value) -> Variant {
     }
 }
 
+/// Pre-populate storage with saved variables from a dictionary.
+/// Logs warnings for any keys/values that cannot be converted.
+fn prepopulate_storage(storage: &MemoryStorage, saved_variables: &VarDictionary) {
+    for (key, value) in saved_variables.iter_shared() {
+        let Some(var_name) = key.try_to::<GString>().ok() else {
+            godot_warn!("from_file_with_state: Ignoring non-string key in saved_variables");
+            continue;
+        };
+        let Some(converted_value) = variant_to_value(&value) else {
+            godot_warn!(
+                "from_file_with_state: Ignoring variable '{}' - unsupported type {:?}",
+                var_name,
+                value.get_type()
+            );
+            continue;
+        };
+        storage.set(&var_name.to_string(), converted_value);
+    }
+}
+
 /// Find the registered Bobbin language by iterating through Engine's script languages
 fn find_bobbin_language() -> Option<Gd<ScriptLanguage>> {
     let mut engine = Engine::singleton();
@@ -1296,78 +1316,108 @@ pub struct BobbinRuntime {
 
 #[godot_api]
 impl BobbinRuntime {
-    /// Create runtime from script content without host state.
+    // =========================================================================
+    // Factory Methods - Primary API
+    // =========================================================================
+
+    /// Create runtime from script content without host state or saved variables.
     #[func]
     fn from_string(content: GString) -> Option<Gd<Self>> {
-        // Use empty host state (no extern variables)
-        Self::from_string_with_host(content, VarDictionary::new())
+        Self::from_string_with_state(content, VarDictionary::new(), VarDictionary::new())
     }
 
-    /// Create runtime with host state Dictionary.
-    #[func]
-    fn from_string_with_host(content: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
-        let storage = Arc::new(MemoryStorage::new());
-        let host = Arc::new(VarDictionaryHostState::from_dictionary(&host_state));
-
-        let storage_dyn: Arc<dyn VariableStorage> = storage.clone();
-        let host_dyn: Arc<dyn HostState> = host.clone();
-
-        match Runtime::new(&content.to_string(), storage_dyn, host_dyn) {
-            Ok(runtime) => Some(Gd::from_init_fn(|base| Self {
-                base,
-                storage,
-                host,
-                inner: runtime,
-                hot_reload: None,
-            })),
-            Err(e) => {
-                godot_error!(
-                    "Failed to create runtime:\n{}",
-                    e.render("<script>", &content.to_string())
-                );
-                None
-            }
-        }
-    }
-
-    /// Create runtime from a .bobbin file path.
+    /// Create runtime from a .bobbin file path without host state or saved variables.
     #[func]
     fn from_file(path: GString) -> Option<Gd<Self>> {
-        Self::from_file_with_host(path, VarDictionary::new())
+        Self::from_file_with_state(path, VarDictionary::new(), VarDictionary::new())
     }
 
-    /// Create runtime from a .bobbin file path with host state.
+    /// Create runtime from script content with pre-populated save variables.
+    ///
+    /// Storage is populated BEFORE runtime creation so that `initialize_if_absent`
+    /// semantics preserve the pre-populated values during initialization.
+    /// See ADR-0002 and ADR-0004 for the persistence contract.
     #[func]
-    fn from_file_with_host(path: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
-        // Load BobbinScript resource
+    fn from_string_with_state(
+        content: GString,
+        saved_variables: VarDictionary,
+        host_state: VarDictionary,
+    ) -> Option<Gd<Self>> {
+        Self::build_runtime(
+            content.to_string(),
+            GString::from("<script>"),
+            saved_variables,
+            host_state,
+        )
+    }
+
+    /// Create runtime from a .bobbin file path with pre-populated save variables.
+    ///
+    /// Storage is populated BEFORE runtime creation so that `initialize_if_absent`
+    /// semantics preserve the pre-populated values during initialization.
+    /// See ADR-0002 and ADR-0004 for the persistence contract.
+    #[func]
+    fn from_file_with_state(
+        path: GString,
+        saved_variables: VarDictionary,
+        host_state: VarDictionary,
+    ) -> Option<Gd<Self>> {
         let Some(resource) = ResourceLoader::singleton()
             .load_ex(&path)
             .type_hint("BobbinScript")
             .done()
         else {
-            godot_error!("BobbinRuntime::from_file: Failed to load {}", path);
+            godot_error!("BobbinRuntime::from_file_with_state: Failed to load {}", path);
             return None;
         };
 
         let Ok(script) = resource.try_cast::<BobbinScript>() else {
-            godot_error!("BobbinRuntime::from_file: {} is not a BobbinScript", path);
+            godot_error!("BobbinRuntime::from_file_with_state: {} is not a BobbinScript", path);
             return None;
         };
 
         let source = script.bind().get_source_code().to_string();
+        Self::build_runtime(source, path, saved_variables, host_state)
+    }
+
+    // =========================================================================
+    // Factory Methods - Deprecated (for backwards compatibility)
+    // =========================================================================
+
+    /// DEPRECATED: Use from_string_with_state() instead.
+    #[func]
+    fn from_string_with_host(content: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
+        Self::from_string_with_state(content, VarDictionary::new(), host_state)
+    }
+
+    /// DEPRECATED: Use from_file_with_state() instead.
+    #[func]
+    fn from_file_with_host(path: GString, host_state: VarDictionary) -> Option<Gd<Self>> {
+        Self::from_file_with_state(path, VarDictionary::new(), host_state)
+    }
+
+    // =========================================================================
+    // Internal Helpers
+    // =========================================================================
+
+    /// Internal helper that builds a runtime with pre-populated storage.
+    fn build_runtime(
+        source: String,
+        path: GString,
+        saved_variables: VarDictionary,
+        host_state: VarDictionary,
+    ) -> Option<Gd<Self>> {
         let storage = Arc::new(MemoryStorage::new());
         let host = Arc::new(VarDictionaryHostState::from_dictionary(&host_state));
 
-        let storage_dyn: Arc<dyn VariableStorage> = storage.clone();
-        let host_dyn: Arc<dyn HostState> = host.clone();
+        prepopulate_storage(&storage, &saved_variables);
 
-        match Runtime::new(&source, storage_dyn, host_dyn) {
+        match Runtime::new(&source, storage.clone(), host.clone()) {
             Ok(runtime) => {
-                // Setup hot reload state (debug builds only)
                 let hot_reload = if Os::singleton().is_debug_build() {
                     let last_modified = FileAccess::get_modified_time(&path);
                     Some(HotReloadState {
-                        source_path: path,
+                        source_path: path.clone(),
                         last_modified,
                         poll_timer: None,
                     })
@@ -1383,9 +1433,7 @@ impl BobbinRuntime {
                     hot_reload,
                 });
 
-                // Start hot reload polling (debug only, requires scene tree)
                 instance.bind_mut().start_hot_reload();
-
                 Some(instance)
             }
             Err(e) => {

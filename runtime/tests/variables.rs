@@ -150,6 +150,176 @@ fn save_mixed_with_temp() {
 }
 
 // =============================================================================
+// Save Variable Pre-population (Storage Persistence Pattern)
+// =============================================================================
+// These tests verify the core runtime supports pre-populated storage as described
+// in ADR-0002/0004. This enables save game restoration to work correctly.
+
+/// Test that pre-populated storage values are preserved by initialize_if_absent.
+/// This verifies the core runtime supports the persistence pattern.
+#[test]
+fn save_variable_prepopulated_storage_preserved() {
+    use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
+    use std::sync::Arc;
+    use support::{EmptyHostState, MemoryStorage};
+
+    let source = r#"
+save has_talked_once = 0
+
+if has_talked_once < 1
+    First time message
+else
+    Repeat message
+"#;
+
+    // Pre-populate storage BEFORE creating runtime (simulates restored save game)
+    let storage = Arc::new(MemoryStorage::new());
+    storage.set("has_talked_once", Value::Number(1.0));
+
+    let runtime = Runtime::new(
+        source,
+        storage.clone() as Arc<dyn VariableStorage>,
+        Arc::new(EmptyHostState) as Arc<dyn HostState>,
+    )
+    .expect("Runtime creation should succeed");
+
+    // initialize_if_absent should NOT overwrite pre-populated value
+    assert_eq!(
+        storage.get("has_talked_once"),
+        Some(Value::Number(1.0)),
+        "Pre-populated value should be preserved by initialize_if_absent"
+    );
+
+    // Condition evaluated with pre-populated value (1 < 1 = false) -> else branch
+    assert_eq!(
+        runtime.current_line(),
+        "Repeat message",
+        "Should show repeat message because pre-populated value is 1"
+    );
+}
+
+/// Test that fresh storage gets initialized to default value.
+/// This is the "first run" case.
+#[test]
+fn save_variable_fresh_storage_initialized() {
+    use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
+    use std::sync::Arc;
+    use support::{EmptyHostState, MemoryStorage};
+
+    let source = r#"
+save has_talked_once = 0
+
+if has_talked_once < 1
+    First time message
+else
+    Repeat message
+"#;
+
+    // Fresh storage (no pre-population)
+    let storage = Arc::new(MemoryStorage::new());
+
+    let runtime = Runtime::new(
+        source,
+        storage.clone() as Arc<dyn VariableStorage>,
+        Arc::new(EmptyHostState) as Arc<dyn HostState>,
+    )
+    .expect("Runtime creation should succeed");
+
+    // initialize_if_absent should set value to 0
+    assert_eq!(
+        storage.get("has_talked_once"),
+        Some(Value::Number(0.0)),
+        "Fresh storage should be initialized to default value"
+    );
+
+    // Condition evaluated with initial value (0 < 1 = true) -> if branch
+    assert_eq!(
+        runtime.current_line(),
+        "First time message",
+        "Should show first time message because initial value is 0"
+    );
+}
+
+/// Test full persistence cycle: first run -> set variable -> second run with shared storage.
+#[test]
+fn save_variable_persistence_across_runtimes() {
+    use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
+    use std::sync::Arc;
+    use support::{EmptyHostState, MemoryStorage};
+
+    let source = r#"
+save has_talked_once = 0
+
+if has_talked_once < 1
+    First time message
+else
+    Repeat message
+set has_talked_once = 1
+"#;
+
+    // Shared storage persists across runtime instances
+    let storage = Arc::new(MemoryStorage::new());
+    let host: Arc<dyn HostState> = Arc::new(EmptyHostState);
+
+    // === First runtime (first conversation) ===
+    {
+        let mut runtime = Runtime::new(
+            source,
+            storage.clone() as Arc<dyn VariableStorage>,
+            Arc::clone(&host),
+        )
+        .expect("Runtime creation should succeed");
+
+        assert_eq!(
+            storage.get("has_talked_once"),
+            Some(Value::Number(0.0)),
+            "First run: should initialize to 0"
+        );
+
+        assert_eq!(
+            runtime.current_line(),
+            "First time message",
+            "First run: should show first time message"
+        );
+
+        // Run to completion (executes set has_talked_once = 1)
+        while runtime.has_more() {
+            runtime.advance().expect("advance should succeed");
+        }
+
+        assert_eq!(
+            storage.get("has_talked_once"),
+            Some(Value::Number(1.0)),
+            "First run: should be 1 after set statement"
+        );
+    }
+
+    // === Second runtime (second conversation, same storage) ===
+    {
+        let runtime = Runtime::new(
+            source,
+            storage.clone() as Arc<dyn VariableStorage>,
+            Arc::clone(&host),
+        )
+        .expect("Runtime creation should succeed");
+
+        // initialize_if_absent should preserve the value from first run
+        assert_eq!(
+            storage.get("has_talked_once"),
+            Some(Value::Number(1.0)),
+            "Second run: should preserve value from first run"
+        );
+
+        // Condition now evaluates with persisted value (1 < 1 = false)
+        assert_eq!(
+            runtime.current_line(),
+            "Repeat message",
+            "Second run: should show repeat message"
+        );
+    }
+}
+
+// =============================================================================
 // Extern Variables (Host State)
 // =============================================================================
 
