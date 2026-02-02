@@ -1,0 +1,3 @@
+extern give_gold(amount)
+
+give_gold(100, 200)

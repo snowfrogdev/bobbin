@@ -1,0 +1,10 @@
+extern give_gold(amount)
+extern play_sound(name)
+
+What do you want?
+- Buy potion
+    give_gold(-50)
+    play_sound("purchase")
+    Here's your potion!
+- Leave
+    Goodbye!

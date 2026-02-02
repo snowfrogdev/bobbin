@@ -16,7 +16,11 @@ pub enum Stmt {
     TempDecl(VarBindingData),
     SaveDecl(VarBindingData),
     ExternDecl(ExternDeclData),
+    /// Declaration of a host-provided command (callable from dialogue)
+    ExternCommandDecl(ExternCommandDeclData),
     Assignment(VarBindingData),
+    /// A command invocation (fire-and-forget call to host)
+    CommandCall(CommandCallData),
     ChoiceSet { choices: Vec<Choice> },
     /// Conditional statement: if/elseif/else
     If {
@@ -145,5 +149,33 @@ pub struct VarBindingData {
 pub struct ExternDeclData {
     pub id: NodeId,
     pub name: String,
+    pub span: Span,
+}
+
+/// Declaration of a host-provided command (callable from dialogue)
+///
+/// Unlike `ExternDeclData` (for variables), this captures the parameter names
+/// for arity validation and documentation.
+#[derive(Debug, Clone)]
+pub struct ExternCommandDeclData {
+    pub id: NodeId,
+    /// The command name (e.g., "give_gold").
+    pub name: String,
+    /// Parameter names for documentation (e.g., ["amount"]).
+    /// The length of this vector determines the expected arity.
+    pub params: Vec<String>,
+    pub span: Span,
+}
+
+/// A command invocation statement.
+///
+/// Commands are fire-and-forget calls that trigger game-side effects.
+#[derive(Debug, Clone)]
+pub struct CommandCallData {
+    pub id: NodeId,
+    /// The command name (e.g., "give_gold").
+    pub name: String,
+    /// The argument expressions (evaluated at runtime).
+    pub args: Vec<Expr>,
     pub span: Span,
 }

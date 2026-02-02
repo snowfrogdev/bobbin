@@ -1,0 +1,6 @@
+extern adjust_gold(amount)
+
+adjust_gold(-50)
+You lost 50 gold!
+adjust_gold(100)
+You gained 100 gold!

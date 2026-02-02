@@ -7,6 +7,7 @@
     { "include": "#declaration" },
     { "include": "#assignment" },
     { "include": "#conditional" },
+    { "include": "#command-call" },
     { "include": "#choice" },
     { "include": "#line" }
   ],
@@ -35,6 +36,17 @@
             "2": { "name": "variable.other.temp.bobbin" },
             "3": { "name": "keyword.operator.assignment.bobbin" },
             "4": { "patterns": [{ "include": "#value" }] }
+          }
+        },
+        {
+          "name": "meta.declaration.extern-command.bobbin",
+          "match": "^\\s*(extern)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\()([^)]*)(\\))\\s*$",
+          "captures": {
+            "1": { "name": "keyword.other.extern.bobbin" },
+            "2": { "name": "entity.name.function.command.bobbin" },
+            "3": { "name": "punctuation.definition.parameters.begin.bobbin" },
+            "4": { "patterns": [{ "include": "#parameter-list" }] },
+            "5": { "name": "punctuation.definition.parameters.end.bobbin" }
           }
         },
         {
@@ -84,6 +96,37 @@
         }
       ]
     },
+    "command-call": {
+      "name": "meta.command-call.bobbin",
+      "match": "^\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s*(\\()(.*)?(\\))\\s*$",
+      "captures": {
+        "1": { "name": "entity.name.function.command.bobbin" },
+        "2": { "name": "punctuation.definition.arguments.begin.bobbin" },
+        "3": { "patterns": [{ "include": "#argument-list" }] },
+        "4": { "name": "punctuation.definition.arguments.end.bobbin" }
+      }
+    },
+    "parameter-list": {
+      "patterns": [
+        {
+          "name": "variable.parameter.bobbin",
+          "match": "[a-zA-Z_][a-zA-Z0-9_]*"
+        },
+        {
+          "name": "punctuation.separator.parameter.bobbin",
+          "match": ","
+        }
+      ]
+    },
+    "argument-list": {
+      "patterns": [
+        { "include": "#expression" },
+        {
+          "name": "punctuation.separator.argument.bobbin",
+          "match": ","
+        }
+      ]
+    },
     "choice": {
       "name": "meta.choice.bobbin",
       "match": "^(\\s*)(-)\\s*(.*)$",
@@ -94,7 +137,7 @@
     },
     "line": {
       "name": "meta.line.bobbin",
-      "match": "^(?!\\s*(?:save|temp|extern|set|if|elseif|else|//|-)\\s?)(.+)$",
+      "match": "^(?!\\s*(?:save|temp|extern|set|if|elseif|else|//|-)\\s?)(?!\\s*[a-zA-Z_][a-zA-Z0-9_]*\\s*\\()(.+)$",
       "captures": {
         "1": { "patterns": [{ "include": "#text-content" }] }
       }

@@ -1,0 +1,9 @@
+extern player_name
+extern give_gold(amount)
+extern play_sound(name)
+
+Welcome, {player_name}!
+play_sound("fanfare")
+Here's your reward.
+give_gold(50)
+Goodbye!

@@ -1,0 +1,4 @@
+extern save_game()
+
+save_game()
+Game saved!

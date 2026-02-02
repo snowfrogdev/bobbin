@@ -48,6 +48,7 @@ See `docs/adr/0001-compiler-architecture.md` for the rationale. Key points:
 | `compiler.rs` | Tree-walks AST to emit bytecode |
 | `vm.rs` | Stack-based bytecode interpreter |
 | `storage.rs` | `VariableStorage` and `HostState` traits for game integration |
+| `commands.rs` | `CommandHandler` trait for game effect invocations |
 
 ### Variable System (ADR-0002, ADR-0004)
 - **save**: Persistent variables (survive save/load)
@@ -77,10 +78,14 @@ See `CONTRIBUTING.md` for the trace file format specification.
 save gold = 100
 temp greeted = false
 extern player_name
+extern give_item(name, count)
+extern play_sound(name)
 
 Welcome, {player_name}!
-- Buy sword
-    set gold = 50
+- Buy sword (50 gold)
+    set gold = gold - 50
+    give_item("sword", 1)
+    play_sound("purchase")
     You bought a sword.
 - Leave
     Goodbye!

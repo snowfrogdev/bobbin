@@ -1,0 +1,9 @@
+# Basic command invocation test
+
+--- path: basic
+[command give_gold(1) = mock]
+> Hello!
+[advance]
+! command give_gold(100)
+> Goodbye!
+! done

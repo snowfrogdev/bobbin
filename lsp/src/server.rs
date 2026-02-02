@@ -8,8 +8,8 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer};
 
 use bobbin_syntax::{
-    AriadneRenderer, BOOLEAN_LITERALS, KEYWORDS, LineIndex, Renderer, VariableDeclaration,
-    VariableKind, analyze, validate,
+    AriadneRenderer, BOOLEAN_LITERALS, CommandDeclaration, KEYWORDS, LineIndex, Renderer,
+    VariableDeclaration, VariableKind, analyze, validate,
 };
 
 use crate::convert::to_lsp_diagnostics;
@@ -179,7 +179,7 @@ impl LanguageServer for BobbinLanguageServer {
         let in_interpolation = is_inside_interpolation(&source, offset);
         let analysis = analyze(&source);
 
-        let items = build_completion_items(&analysis.declarations, in_interpolation);
+        let items = build_completion_items(&analysis.declarations, &analysis.commands, in_interpolation);
         Ok(Some(CompletionResponse::List(CompletionList {
             is_incomplete: false,
             items,
@@ -202,6 +202,7 @@ fn is_inside_interpolation(source: &str, offset: usize) -> bool {
 /// Build completion items from declarations and context.
 fn build_completion_items(
     decls: &[VariableDeclaration],
+    commands: &[CommandDeclaration],
     in_interpolation: bool,
 ) -> Vec<CompletionItem> {
     let mut items = Vec::new();
@@ -224,8 +225,26 @@ fn build_completion_items(
         }
     }
 
-    // Keywords only outside interpolation
+    // Commands only outside interpolation
     if !in_interpolation {
+        for cmd in commands {
+            if seen.insert(cmd.name.clone()) {
+                let params_str = cmd.params.join(", ");
+                let label = format!("{}({})", cmd.name, params_str);
+                let insert_text = format!("{}($0)", cmd.name);
+                items.push(CompletionItem {
+                    label,
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    detail: Some("(command)".to_string()),
+                    insert_text: Some(insert_text),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    sort_text: Some(format!("0_{}", cmd.name)), // Same priority as variables
+                    ..Default::default()
+                });
+            }
+        }
+
+        // Keywords
         for keyword in KEYWORDS {
             items.push(CompletionItem {
                 label: (*keyword).to_string(),
@@ -291,14 +310,14 @@ mod tests {
             },
         ];
 
-        let items = build_completion_items(&decls, false);
+        let items = build_completion_items(&decls, &[], false);
         let x_items: Vec<_> = items.iter().filter(|i| i.label == "x").collect();
         assert_eq!(x_items.len(), 1);
     }
 
     #[test]
     fn build_completion_items_includes_keywords_outside_interpolation() {
-        let items = build_completion_items(&[], false);
+        let items = build_completion_items(&[], &[], false);
         let keyword_items: Vec<_> = items
             .iter()
             .filter(|i| i.kind == Some(CompletionItemKind::KEYWORD))
@@ -309,7 +328,7 @@ mod tests {
 
     #[test]
     fn build_completion_items_excludes_keywords_in_interpolation() {
-        let items = build_completion_items(&[], true);
+        let items = build_completion_items(&[], &[], true);
         let keyword_items: Vec<_> = items
             .iter()
             .filter(|i| i.kind == Some(CompletionItemKind::KEYWORD))

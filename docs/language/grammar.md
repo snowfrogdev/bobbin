@@ -4,12 +4,14 @@
 
 ```ebnf
 script        = { statement } ;
-statement     = save_decl | temp_decl | extern_decl | assignment
-              | line | choice_set | if_stmt ;
+statement     = save_decl | temp_decl | extern_decl | extern_command_decl
+              | assignment | command_call | line | choice_set | if_stmt ;
 save_decl     = SAVE , NEWLINE ;
 temp_decl     = TEMP , NEWLINE ;
 extern_decl   = EXTERN , NEWLINE ;
+extern_command_decl = EXTERN_COMMAND , NEWLINE ;
 assignment    = SET , NEWLINE ;
+command_call  = COMMAND_CALL , NEWLINE ;
 line          = LINE , NEWLINE ;
 choice_set    = choice , { choice } ;
 choice        = CHOICE , NEWLINE , [ INDENT , { statement } , DEDENT ] ;
@@ -24,15 +26,20 @@ else_clause   = ELSE , NEWLINE , INDENT , statement , { statement } , DEDENT ;
 ## Lexical Grammar
 
 ```ebnf
-SAVE    = "save" , identifier , "=" , expression ;
-TEMP    = "temp" , identifier , "=" , expression ;
-EXTERN  = "extern" , identifier ;
-SET     = "set" , identifier , "=" , expression ;
-IF      = "if" , expression ;            (* condition must evaluate to boolean *)
-ELSEIF  = "elseif" , expression ;        (* condition must evaluate to boolean *)
-ELSE    = "else" ;
-LINE    = text ;                         (* line not starting with "- ", "save ", "temp ", "extern ", "set ", "if ", "elseif ", or "else" *)
-CHOICE  = "-" , text ;                   (* line starting with "- " *)
+SAVE           = "save" , identifier , "=" , expression ;
+TEMP           = "temp" , identifier , "=" , expression ;
+EXTERN         = "extern" , identifier ;
+EXTERN_COMMAND = "extern" , identifier , "(" , [ param_list ] , ")" ;
+SET            = "set" , identifier , "=" , expression ;
+COMMAND_CALL   = identifier , "(" , [ arg_list ] , ")" ;
+IF             = "if" , expression ;            (* condition must evaluate to boolean *)
+ELSEIF         = "elseif" , expression ;        (* condition must evaluate to boolean *)
+ELSE           = "else" ;
+LINE           = text ;                         (* line not starting with "- ", "save ", "temp ", "extern ", "set ", "if ", "elseif ", "else", or command call *)
+CHOICE         = "-" , text ;                   (* line starting with "- " *)
+
+param_list     = identifier , { "," , identifier } ;
+arg_list       = expression , { "," , expression } ;
 NEWLINE = "\n" | "\r\n" | "\r" ;
 INDENT  = ? increase in indentation level ? ;
 DEDENT  = ? decrease in indentation level ? ;
@@ -126,6 +133,64 @@ If extern state changes between save and load, the saved value takes precedence.
 - Self-referential assignments are allowed: `set counter = counter + 1`
 - Assigning to `extern` variables is a semantic error (they are read-only)
 - See ADR-0003 for the syntax decision rationale
+
+### Commands
+
+Commands allow Bobbin scripts to trigger game effects (giving items, playing sounds, etc.). Commands are fire-and-forget: they do not return values.
+
+#### Command Declaration
+
+Commands must be declared before use with `extern` followed by a parameter list:
+
+```bobbin
+extern give_gold(amount)       // Single parameter
+extern give_item(name, count)  // Multiple parameters
+extern save_game()             // No parameters
+```
+
+- The parameter names are for documentation only; they are not enforced at runtime
+- The number of parameters determines the expected arity (argument count)
+- Command names must not conflict with variable names
+
+#### Command Invocation
+
+Commands are invoked with function-call syntax:
+
+```bobbin
+give_gold(100)
+give_item("sword", 1)
+save_game()
+```
+
+- Arguments are expressions (variables, literals, arithmetic, etc.)
+- Argument count must match the declaration's parameter count
+- Arguments are evaluated left-to-right before the command executes
+
+#### Complete Example
+
+```bobbin
+extern player_name
+extern player_gold
+extern give_gold(amount)
+extern play_sound(name)
+
+Welcome, {player_name}! You have {player_gold} gold.
+
+- Buy potion (50 gold)
+    give_gold(-50)
+    play_sound("purchase")
+    Here's your potion!
+- Leave
+    Goodbye!
+```
+
+#### Error Handling
+
+- Undeclared command invocation: compile-time error
+- Wrong number of arguments: compile-time error
+- Runtime command failures are reported to the game engine, which decides how to handle them
+
+See ADR-0005 for the design rationale.
 
 ### Choices
 
@@ -239,4 +304,3 @@ The following syntax elements are planned but not yet specified:
 - **Compound assignment operators**: `+=`, `-=`, `*=`, `/=`
 - **Tables**: Literal syntax, access syntax, methods
 - **Imports**: Module system syntax
-- **Commands**: Syntax for triggering game effects (giving items, playing sounds, etc.)

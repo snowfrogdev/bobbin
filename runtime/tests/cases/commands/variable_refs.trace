@@ -1,0 +1,7 @@
+# Command args referencing variables
+
+--- path: variable_refs
+[command give_gold(1) = mock]
+! command give_gold(50)
+> You got level-scaled gold!
+! done

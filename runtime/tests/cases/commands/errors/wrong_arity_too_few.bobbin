@@ -1,0 +1,3 @@
+extern give_item(name, count)
+
+give_item("sword")

@@ -1,5 +1,6 @@
 use bobbin_syntax::{
-    BinaryOp, Expr, Literal, NodeId, Script, Stmt, SymbolTable, TextPart, UnaryOp, VarBindingData,
+    BinaryOp, CommandCallData, Expr, Literal, NodeId, Script, Stmt, SymbolTable, TextPart, UnaryOp,
+    VarBindingData,
 };
 
 use crate::chunk::{Chunk, Instruction, Value};
@@ -107,6 +108,26 @@ impl<'a> Compiler<'a> {
             Stmt::ExternDecl(_) => {
                 // No-op: extern declarations don't generate code.
                 // The host provides values on-demand when GetHost executes.
+            }
+            Stmt::ExternCommandDecl(_) => {
+                // No-op: extern command declarations don't generate code.
+                // The command handler is provided at runtime creation.
+            }
+            Stmt::CommandCall(CommandCallData {
+                name, args, span, ..
+            }) => {
+                // Compile arguments onto the stack (in order)
+                for arg in args {
+                    self.compile_expr(arg);
+                }
+                // Emit Command instruction
+                self.chunk.emit(
+                    Instruction::Command {
+                        name: name.clone(),
+                        arg_count: args.len() as u8,
+                    },
+                    span.start,
+                );
             }
             Stmt::Assignment(VarBindingData {
                 id, init_expr, span, ..

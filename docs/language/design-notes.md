@@ -227,6 +227,71 @@ else
 - `elseif` is more readable in prose than `elif`
 - No colons/parentheses reduces visual noise
 
+### Commands (Dialogue-to-Game Effects)
+
+**Decision**: Function-style syntax with required declarations.
+
+Commands allow Bobbin scripts to trigger game effects like giving items, playing sounds, or completing quests:
+
+```bobbin
+extern give_gold(amount)
+extern play_sound(name)
+extern give_item(name, count)
+
+give_gold(100)
+play_sound("coin")
+give_item("sword", 1)
+```
+
+**Syntax:**
+
+- **Declaration**: `extern command_name(param1, param2, ...)` — declares a command the host provides
+- **Invocation**: `command_name(expr1, expr2, ...)` — calls the command with arguments
+
+**Semantics:**
+
+- Fire-and-forget: commands do not return values
+- Arguments are expressions: literals, variables, arithmetic, etc.
+- Argument count is validated at compile time against the declaration
+- Commands are provided by the game engine at runtime creation
+- Command names must not conflict with variable names
+
+**API:**
+
+Commands are registered via the `CommandHandler` trait:
+
+```rust
+pub trait CommandHandler: Send + Sync {
+    fn invoke(&self, name: &str, args: &[Value]) -> Result<(), CommandError>;
+    fn is_registered(&self, name: &str) -> bool;
+    fn arity(&self, name: &str) -> Option<usize>;
+}
+```
+
+**GDScript:**
+
+```gdscript
+var runtime = Bobbin.create("res://dialogue/merchant.bobbin", {}, {}, {
+    "give_gold": func(args): player.gold += int(args[0]),
+    "play_sound": func(args): AudioManager.play(args[0]),
+})
+```
+
+**Rationale:**
+
+- Function-style syntax is familiar and supports multiple arguments
+- Required declarations enable compile-time validation of typos and arity
+- Fire-and-forget semantics keep the model simple; use `extern` variables for queries
+- `extern` keyword reuse maintains consistency with extern variables
+
+**Alternatives considered:**
+
+- Keyword-style (`command give_gold 100`) — less extensible for multiple args
+- Signal-based — more complex for simple effects
+- Return values — adds complexity; can use extern variables for queries instead
+
+See ADR-0005 for the full design rationale.
+
 ## To Be Decided
 
 The following design decisions need to be made before implementation:
@@ -284,18 +349,6 @@ Note: Basic interpolation syntax (`{var}` and `{{` escape), comparison expressio
 - Export syntax needed?
 - Circular dependency handling?
 
-### Dialogue-to-Game Effects (Commands)
-
-**Context**: Dialogue may need to trigger game effects (give items, complete quests, play sounds). Direct writes to game variables would bypass game logic, so a command/event system is preferred.
-
-**Questions**:
-- Command syntax: function-style `give_gold(100)` or keyword-style `command give_gold 100`?
-- How are commands registered by the game?
-- Return values from commands?
-- Error handling for unknown commands?
-
-See ADR-0004 for the architectural rationale.
-
 ## Implementation Notes
 
 ### Scanner Token Types
@@ -307,11 +360,13 @@ When implementing, the scanner should recognize these line prefixes:
 | `save ` | SAVE | `save x = 0` |
 | `temp ` | TEMP | `temp y = 0` |
 | `extern ` | EXTERN | `extern player_health` |
+| `extern ` + `(` | EXTERN_COMMAND | `extern give_gold(amount)` |
 | `set ` | SET | `set x = 1` |
 | `if ` | IF | `if condition` |
 | `elseif ` | ELSEIF | `elseif other` |
 | `else` | ELSE | `else` |
 | `- ` | CHOICE | `- Option text` |
+| `identifier(` | COMMAND_CALL | `give_gold(100)` |
 | (other) | LINE | `Dialogue text` |
 
 ### Value Type Enum

@@ -84,6 +84,7 @@ Runtime tests live in `runtime/tests/` with this structure:
 
 - `basic.rs` — Simple dialogue tests
 - `choices.rs` — Choice/branching tests
+- `commands.rs` — Command invocation tests
 - `conditionals.rs` — Conditional (if/elseif/else) tests
 - `expressions.rs` — Expression operator tests
 - `variables.rs` — Variable and interpolation tests
@@ -140,9 +141,11 @@ Format elements:
 - `! done` — Assert `has_more()` is false
 - `! has_more` — Assert `has_more()` is true
 - `! waiting_for_choice` — Assert `is_waiting_for_choice()` is true
+- `! command <name>(<args>)` — Assert command was called with given arguments
 - `[advance]` — Call `advance()`
 - `[choice <n>]` — Call `select_choice(n)`
 - `[host <var> = <value>]` — Set extern variable before execution
+- `[command <name>(<arity>) = mock]` — Register mock command with given arity
 - `# comment` — Comment (ignored)
 
 **`.err`** — Substrings that must appear in error message (one per line, case-insensitive):

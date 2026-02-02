@@ -1,0 +1,23 @@
+# Commands inside choice branches
+
+--- path: buy_potion
+[command give_gold(1) = mock]
+[command play_sound(1) = mock]
+> What do you want?
+[advance]
+? Buy potion | Leave
+[choice 0]
+! command give_gold(-50)
+! command play_sound("purchase")
+> Here's your potion!
+! done
+
+--- path: leave
+[command give_gold(1) = mock]
+[command play_sound(1) = mock]
+> What do you want?
+[advance]
+? Buy potion | Leave
+[choice 1]
+> Goodbye!
+! done

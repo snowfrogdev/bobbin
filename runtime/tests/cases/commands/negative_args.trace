@@ -1,0 +1,10 @@
+# Command with negative numeric arguments
+
+--- path: negative_args
+[command adjust_gold(1) = mock]
+! command adjust_gold(-50)
+> You lost 50 gold!
+[advance]
+! command adjust_gold(100)
+> You gained 100 gold!
+! done

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use bobbin_syntax::{Diagnostic, DiagnosticContext, IntoDiagnostic, Severity};
 
 use crate::chunk::{Chunk, Instruction, Value};
+use crate::commands::{CommandError, CommandHandler};
 use crate::storage::{HostState, VariableStorage};
 
 #[derive(Debug, Clone)]
@@ -19,6 +20,13 @@ pub enum RuntimeError {
     DivisionByZero,
     /// Type mismatch at runtime (semantic analysis should prevent this, but fail explicitly)
     TypeMismatch { expected: &'static str, got: &'static str },
+    /// A command invocation failed.
+    CommandFailed {
+        /// The command that failed.
+        command: String,
+        /// The underlying error.
+        error: CommandError,
+    },
 }
 
 impl std::fmt::Display for RuntimeError {
@@ -48,6 +56,9 @@ impl std::fmt::Display for RuntimeError {
             }
             RuntimeError::TypeMismatch { expected, got } => {
                 write!(f, "type mismatch: expected {}, got {}", expected, got)
+            }
+            RuntimeError::CommandFailed { command, error } => {
+                write!(f, "command '{}' failed: {}", command, error)
             }
         }
     }
@@ -111,6 +122,16 @@ impl IntoDiagnostic for RuntimeError {
                 notes: vec!["This is likely a compiler bug - semantic analysis should have caught this".to_string()],
                 suggestions: vec![],
             },
+            RuntimeError::CommandFailed { command, error } => Diagnostic {
+                severity: Severity::Error,
+                message: format!("command '{}' failed: {}", command, error),
+                labels: vec![],
+                notes: vec![
+                    "Command handlers can fail for various reasons".to_string(),
+                    "Check your command implementation for the specific error".to_string(),
+                ],
+                suggestions: vec![],
+            },
         }
     }
 }
@@ -127,6 +148,7 @@ pub struct VM {
     stack: Vec<Value>,
     storage: Arc<dyn VariableStorage>,
     host: Arc<dyn HostState>,
+    commands: Arc<dyn CommandHandler>,
 }
 
 impl std::fmt::Debug for VM {
@@ -140,13 +162,19 @@ impl std::fmt::Debug for VM {
 }
 
 impl VM {
-    pub fn new(chunk: Chunk, storage: Arc<dyn VariableStorage>, host: Arc<dyn HostState>) -> Self {
+    pub fn new(
+        chunk: Chunk,
+        storage: Arc<dyn VariableStorage>,
+        host: Arc<dyn HostState>,
+        commands: Arc<dyn CommandHandler>,
+    ) -> Self {
         Self {
             chunk,
             ip: 0,
             stack: Vec::new(),
             storage,
             host,
+            commands,
         }
     }
 
@@ -398,6 +426,23 @@ impl VM {
                             });
                         }
                     }
+                }
+                Instruction::Command { name, arg_count } => {
+                    // Pop arguments in reverse order (they were pushed left-to-right)
+                    let mut args = Vec::with_capacity(arg_count as usize);
+                    for _ in 0..arg_count {
+                        args.push(self.stack.pop().expect("stack underflow: compiler bug"));
+                    }
+                    args.reverse(); // Restore correct argument order
+
+                    // Invoke command handler
+                    if let Err(error) = self.commands.invoke(&name, &args) {
+                        return Err(RuntimeError::CommandFailed {
+                            command: name.clone(),
+                            error,
+                        });
+                    }
+                    // Commands are fire-and-forget; no return value pushed
                 }
                 Instruction::Return => {
                     // Note: stack may have locals remaining, that's OK

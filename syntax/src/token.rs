@@ -43,6 +43,7 @@ pub enum TokenKind {
     Percent,      // %
     OpenParen,    // (
     CloseParen,   // )
+    Comma,        // ,
     OpenBrace,
     CloseBrace,
 

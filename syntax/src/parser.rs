@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 
 use crate::ast::{
-    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp,
-    VarBindingData,
+    BinaryOp, Choice, CommandCallData, Expr, ExternCommandDeclData, ExternDeclData, Literal,
+    NodeId, Script, Stmt, TextPart, UnaryOp, VarBindingData,
 };
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::scanner::LexicalError;
@@ -83,6 +83,7 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                 TokenKind::TextSegment | TokenKind::OpenBrace => Some(self.line_statement()),
                 TokenKind::Choice => Some(self.choice_set()),
                 TokenKind::If => Some(self.if_statement()),
+                TokenKind::Identifier => Some(self.command_call()),
                 _ => None,
             },
             _ => None,
@@ -153,13 +154,13 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
         Stmt::SaveDecl(data)
     }
 
-    /// Parse an extern declaration: extern name (no initializer)
+    /// Parse an extern declaration: extern name (variable) or extern name(params) (command)
     fn extern_declaration(&mut self) -> Stmt {
         let start_token = self.advance(); // Consume 'extern'
         let id = self.next_id();
 
-        // Expect identifier (no = literal for extern)
-        let (name, end) = if self.check(TokenKind::Identifier) {
+        // Expect identifier
+        let (name, name_end) = if self.check(TokenKind::Identifier) {
             let token = self.advance();
             (token.lexeme.to_string(), token.span.end)
         } else {
@@ -169,16 +170,142 @@ impl<'a, I: Iterator<Item = Result<Token<'a>, LexicalError>>> Parser<'a, I> {
                 span,
             });
             self.synchronize();
-            (String::new(), start_token.span.end)
+            return Stmt::ExternDecl(ExternDeclData {
+                id,
+                name: String::new(),
+                span: Span {
+                    start: start_token.span.start,
+                    end: start_token.span.end,
+                },
+            });
         };
 
+        // Check if this is a command declaration (has parentheses)
+        if self.check(TokenKind::OpenParen) {
+            self.advance(); // Consume '('
+
+            // Parse parameter names
+            let mut params = Vec::new();
+            if !self.check(TokenKind::CloseParen) {
+                loop {
+                    if self.check(TokenKind::Identifier) {
+                        let param_token = self.advance();
+                        params.push(param_token.lexeme.to_string());
+                    } else {
+                        let span = self.current_span();
+                        self.errors.push(ParseError::Syntax {
+                            message: "Expected parameter name".to_string(),
+                            span,
+                        });
+                        break;
+                    }
+
+                    if !self.check(TokenKind::Comma) {
+                        break;
+                    }
+                    self.advance(); // Consume ','
+                }
+            }
+
+            // Expect closing paren
+            let end = if self.check(TokenKind::CloseParen) {
+                let close_token = self.advance();
+                close_token.span.end
+            } else {
+                let span = self.current_span();
+                self.errors.push(ParseError::Syntax {
+                    message: "Expected ')' after command parameters".to_string(),
+                    span,
+                });
+                name_end
+            };
+
+            return Stmt::ExternCommandDecl(ExternCommandDeclData {
+                id,
+                name,
+                params,
+                span: Span {
+                    start: start_token.span.start,
+                    end,
+                },
+            });
+        }
+
+        // No parentheses - this is a variable declaration
         Stmt::ExternDecl(ExternDeclData {
             id,
             name,
             span: Span {
                 start: start_token.span.start,
-                end,
+                end: name_end,
             },
+        })
+    }
+
+    /// Parse a command call: name(args)
+    fn command_call(&mut self) -> Stmt {
+        let id = self.next_id();
+        let name_token = self.advance(); // Consume identifier
+        let name = name_token.lexeme.to_string();
+        let start = name_token.span.start;
+
+        // Expect opening paren
+        if !self.check(TokenKind::OpenParen) {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: "Expected '(' after command name".to_string(),
+                span,
+            });
+            return Stmt::CommandCall(CommandCallData {
+                id,
+                name,
+                args: Vec::new(),
+                span: name_token.span,
+            });
+        }
+        self.advance(); // Consume '('
+
+        // Parse arguments
+        let mut args = Vec::new();
+        if !self.check(TokenKind::CloseParen) {
+            loop {
+                // Parse expression argument
+                if let Some((expr, _end)) = self.parse_logical_or() {
+                    args.push(expr);
+                } else {
+                    let span = self.current_span();
+                    self.errors.push(ParseError::Syntax {
+                        message: "Expected expression in command arguments".to_string(),
+                        span,
+                    });
+                    break;
+                }
+
+                if !self.check(TokenKind::Comma) {
+                    break;
+                }
+                self.advance(); // Consume ','
+            }
+        }
+
+        // Expect closing paren
+        let end = if self.check(TokenKind::CloseParen) {
+            let close_token = self.advance();
+            close_token.span.end
+        } else {
+            let span = self.current_span();
+            self.errors.push(ParseError::Syntax {
+                message: "Expected ')' after command arguments".to_string(),
+                span,
+            });
+            name_token.span.end
+        };
+
+        Stmt::CommandCall(CommandCallData {
+            id,
+            name,
+            args,
+            span: Span { start, end },
         })
     }
 
@@ -1356,7 +1483,6 @@ else
 #[cfg(test)]
 mod token_debug_tests {
     use crate::scanner::Scanner;
-    use crate::token::TokenKind;
 
     #[test]
     fn debug_token_stream() {

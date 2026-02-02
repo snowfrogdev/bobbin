@@ -21,14 +21,21 @@ var _host_state: Dictionary = {
 	"player_gold": 150
 }
 
+# Command execution log for testing
+var _command_log: Array[String] = []
+
 var _runtime: BobbinRuntime
 var _is_active: bool = false
 var _choice_buttons: Array[Button] = []
 var _selected_choice_index: int = 0
 var _last_line: String = ""
+var _audio_player: AudioStreamPlayer
 
 
 func _ready() -> void:
+	# Create audio player for sound commands
+	_audio_player = AudioStreamPlayer.new()
+	add_child(_audio_player)
 	_continue_indicator.text = continue_text
 	_continue_indicator.hide()
 	_choices_container.hide()
@@ -86,7 +93,18 @@ func _on_dialog_panel_input(event: InputEvent) -> void:
 
 
 func _start_cutscene() -> void:
-	_runtime = Bobbin.create_with_host("res://dialog/test_expressions.bobbin", _host_state)
+	# Create runtime with commands support
+	_runtime = Bobbin.create(
+		"res://dialog/test_commands.bobbin",
+		{},  # saved_variables
+		_host_state,
+		{
+			"give_gold": _on_give_gold,
+			"take_gold": _on_take_gold,
+			"play_sound": _on_play_sound,
+			"show_notification": _on_show_notification,
+		}
+	)
 
 	# Connect hot reload signals (debug builds only)
 	if OS.is_debug_build():
@@ -95,6 +113,38 @@ func _start_cutscene() -> void:
 
 	_show_current_content()
 	_is_active = true
+
+
+# Command handlers
+# With live host state, changes to _host_state are immediately visible to the runtime.
+# Just update _host_state directly - no sync needed.
+
+func _on_give_gold(args: Array) -> void:
+	var amount = int(args[0])
+	_host_state["player_gold"] += amount
+	_command_log.append("give_gold(%d) - Gold is now %d" % [amount, _host_state["player_gold"]])
+	print("Command: " + _command_log[-1])
+
+
+func _on_take_gold(args: Array) -> void:
+	var amount = int(args[0])
+	_host_state["player_gold"] = max(0, _host_state["player_gold"] - amount)
+	_command_log.append("take_gold(%d) - Gold is now %d" % [amount, _host_state["player_gold"]])
+	print("Command: " + _command_log[-1])
+
+
+func _on_play_sound(args: Array) -> void:
+	var sound_name = str(args[0])
+	_command_log.append("play_sound('%s')" % sound_name)
+	print("Command: " + _command_log[-1])
+	_play_beep()
+
+
+func _on_show_notification(args: Array) -> void:
+	var title = str(args[0])
+	var message = str(args[1])
+	_command_log.append("show_notification('%s', '%s')" % [title, message])
+	print("Command: " + _command_log[-1])
 
 
 func _on_dialogue_reloaded() -> void:
@@ -115,6 +165,7 @@ func _on_advance_requested() -> void:
 
 
 func _show_current_content() -> void:
+	# No sync needed - host state is live (runtime reads from same dictionary)
 	_update_status_display()
 	if _runtime.is_waiting_for_choice():
 		_show_choices()
@@ -130,6 +181,10 @@ func _update_status_display() -> void:
 	var vars := _runtime.get_all_variables()
 	for key in vars:
 		text += "%s: %s\n" % [key, str(vars[key])]
+	if not _command_log.is_empty():
+		text += "\n=== Command Log ===\n"
+		for entry in _command_log:
+			text += entry + "\n"
 	_status_label.text = text
 
 
@@ -226,3 +281,27 @@ func _on_remove_rep_pressed() -> void:
 	var current_rep: int = _runtime.get_variable("reputation")
 	_runtime.set_variable("reputation", max(0, current_rep - 10))
 	_update_status_display()
+
+
+func _play_beep(frequency: float = 440.0, duration: float = 0.15) -> void:
+	# Generate a simple sine wave beep programmatically
+	var sample_rate := 44100
+	var num_samples := int(sample_rate * duration)
+	var audio := AudioStreamWAV.new()
+	audio.mix_rate = sample_rate
+	audio.format = AudioStreamWAV.FORMAT_8_BITS
+	audio.stereo = false
+
+	var data := PackedByteArray()
+	data.resize(num_samples)
+	for i in num_samples:
+		var t := float(i) / sample_rate
+		# Apply fade out to avoid click at end
+		var envelope := 1.0 - (float(i) / num_samples)
+		var sample := sin(t * frequency * TAU) * envelope
+		# Convert to unsigned 8-bit (0-255, with 128 as center)
+		data[i] = int((sample * 0.5 + 0.5) * 255)
+
+	audio.data = data
+	_audio_player.stream = audio
+	_audio_player.play()

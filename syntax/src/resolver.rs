@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::ast::{BinaryOp, Choice, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp, VarBindingData};
+use crate::ast::{BinaryOp, Choice, CommandCallData, ExternCommandDeclData, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp, VarBindingData};
 use crate::diagnostic::{Diagnostic, DiagnosticContext, IntoDiagnostic};
 use crate::token::Span;
 
@@ -85,6 +85,31 @@ pub enum SemanticError {
         context: &'static str, // "if" or "elseif"
         got_type: ValueType,
         span: Span,
+    },
+    /// Command invocation without a corresponding extern declaration
+    UndeclaredCommand {
+        name: String,
+        span: Span,
+    },
+    /// Command called with wrong number of arguments
+    CommandArityMismatch {
+        name: String,
+        expected: usize,
+        got: usize,
+        span: Span,
+        declaration_span: Span,
+    },
+    /// Command declaration shadows an existing variable
+    CommandShadowsVariable {
+        name: String,
+        span: Span,
+        original: Span,
+    },
+    /// Variable declaration shadows an existing command
+    VariableShadowsCommand {
+        name: String,
+        span: Span,
+        original: Span,
     },
 }
 
@@ -226,6 +251,47 @@ impl IntoDiagnostic for SemanticError {
                 format!("expected bool, got {}", got_type.name()),
             )
             .with_note("Conditions must evaluate to true or false"),
+            SemanticError::UndeclaredCommand { name, span } => Diagnostic::error(
+                format!("undeclared command '{}'", name),
+                span,
+                "command not declared",
+            )
+            .with_note(format!("add declaration: extern {}(...)", name)),
+            SemanticError::CommandArityMismatch {
+                name,
+                expected,
+                got,
+                span,
+                declaration_span,
+            } => Diagnostic::error(
+                format!(
+                    "command '{}' expects {} argument(s), got {}",
+                    name, expected, got
+                ),
+                span,
+                format!("expected {} argument(s)", expected),
+            )
+            .with_secondary(declaration_span, "command declared here"),
+            SemanticError::CommandShadowsVariable {
+                name,
+                span,
+                original,
+            } => Diagnostic::error(
+                format!("command '{}' shadows variable", name),
+                span,
+                "command declared here",
+            )
+            .with_secondary(original, "variable declared here"),
+            SemanticError::VariableShadowsCommand {
+                name,
+                span,
+                original,
+            } => Diagnostic::error(
+                format!("variable '{}' shadows command", name),
+                span,
+                "variable declared here",
+            )
+            .with_secondary(original, "command declared here"),
         }
     }
 }
@@ -243,6 +309,14 @@ pub enum VariableKind {
 pub struct VariableDeclaration {
     pub name: String,
     pub kind: VariableKind,
+    pub span: Span,
+}
+
+/// Information about a command declaration (for IDE features)
+#[derive(Debug, Clone)]
+pub struct CommandDeclaration {
+    pub name: String,
+    pub params: Vec<String>,
     pub span: Span,
 }
 
@@ -281,6 +355,15 @@ struct ExternVarInfo {
     span: Span, // for error messages (no slot - uses host state)
 }
 
+/// Information about a declared command
+#[derive(Debug)]
+struct CommandInfo {
+    /// Number of expected arguments
+    arity: usize,
+    /// Source location of the declaration
+    span: Span,
+}
+
 /// A lexical scope containing variable declarations
 #[derive(Debug)]
 struct Scope {
@@ -305,8 +388,12 @@ pub struct Resolver<'a> {
     save_bindings: HashMap<NodeId, String>,
     /// Extern variable bindings: NodeId -> name
     extern_bindings: HashMap<NodeId, String>,
+    /// Declared commands: name -> info (including arity)
+    commands: HashMap<String, CommandInfo>,
     /// All variable declarations (for IDE features)
     declarations: Vec<VariableDeclaration>,
+    /// All command declarations (for IDE features)
+    command_declarations: Vec<CommandDeclaration>,
     errors: Vec<SemanticError>,
 }
 
@@ -324,7 +411,9 @@ impl<'a> Resolver<'a> {
             bindings: HashMap::new(),
             save_bindings: HashMap::new(),
             extern_bindings: HashMap::new(),
+            commands: HashMap::new(),
             declarations: Vec::new(),
+            command_declarations: Vec::new(),
             errors: Vec::new(),
         }
     }
@@ -340,6 +429,7 @@ impl<'a> Resolver<'a> {
     ) -> (
         Result<SymbolTable, Vec<SemanticError>>,
         Vec<VariableDeclaration>,
+        Vec<CommandDeclaration>,
         Vec<String>,
     ) {
         // Walk the AST
@@ -348,6 +438,7 @@ impl<'a> Resolver<'a> {
         }
 
         let declarations = self.declarations.clone();
+        let command_declarations = self.command_declarations.clone();
         let known_vars = self.known_variables();
 
         if self.errors.is_empty() {
@@ -359,10 +450,11 @@ impl<'a> Resolver<'a> {
                     declarations: self.declarations,
                 }),
                 declarations,
+                command_declarations,
                 known_vars,
             )
         } else {
-            (Err(self.errors), declarations, known_vars)
+            (Err(self.errors), declarations, command_declarations, known_vars)
         }
     }
 
@@ -479,6 +571,12 @@ impl<'a> Resolver<'a> {
                     }
                     self.pop_scope();
                 }
+            }
+            Stmt::ExternCommandDecl(data) => {
+                self.declare_extern_command(data);
+            }
+            Stmt::CommandCall(data) => {
+                self.resolve_command_call(data);
             }
         }
     }
@@ -773,6 +871,16 @@ impl<'a> Resolver<'a> {
 
     /// Declare a temp variable in the current (innermost) scope
     fn declare_temp(&mut self, id: NodeId, name: &str, span: Span, value_type: ValueType) {
+        // Check for conflict with commands
+        if let Some(cmd_info) = self.commands.get(name) {
+            self.errors.push(SemanticError::VariableShadowsCommand {
+                name: name.to_string(),
+                span,
+                original: cmd_info.span,
+            });
+            return;
+        }
+
         // Check for conflict with save/extern variables (file-global)
         if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
@@ -826,6 +934,16 @@ impl<'a> Resolver<'a> {
 
     /// Declare a save variable (file-global, uses external storage)
     fn declare_save(&mut self, id: NodeId, name: &str, span: Span, value_type: ValueType) {
+        // Check for conflict with commands
+        if let Some(cmd_info) = self.commands.get(name) {
+            self.errors.push(SemanticError::VariableShadowsCommand {
+                name: name.to_string(),
+                span,
+                original: cmd_info.span,
+            });
+            return;
+        }
+
         // Check for conflict with save/extern variables (file-global)
         if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
@@ -863,6 +981,16 @@ impl<'a> Resolver<'a> {
 
     /// Declare an extern variable (file-global, read-only, host-provided)
     fn declare_extern(&mut self, _id: NodeId, name: &str, span: Span) {
+        // Check for conflict with commands
+        if let Some(cmd_info) = self.commands.get(name) {
+            self.errors.push(SemanticError::VariableShadowsCommand {
+                name: name.to_string(),
+                span,
+                original: cmd_info.span,
+            });
+            return;
+        }
+
         // Check for conflict with save/extern variables (file-global)
         if let Some(original) = self.find_global_conflict(name) {
             self.errors.push(SemanticError::Shadowing {
@@ -894,6 +1022,87 @@ impl<'a> Resolver<'a> {
             kind: VariableKind::Extern,
             span,
         });
+    }
+
+    /// Declare an extern command (file-global)
+    fn declare_extern_command(&mut self, data: &ExternCommandDeclData) {
+        let name = &data.name;
+        let span = data.span;
+        let arity = data.params.len();
+
+        // Check for conflict with commands
+        if let Some(existing) = self.commands.get(name) {
+            self.errors.push(SemanticError::Shadowing {
+                name: name.to_string(),
+                span,
+                original: existing.span,
+            });
+            return;
+        }
+
+        // Check for conflict with variables (any scope)
+        if let Some(original) = self.find_global_conflict(name) {
+            self.errors.push(SemanticError::CommandShadowsVariable {
+                name: name.to_string(),
+                span,
+                original,
+            });
+            return;
+        }
+        if let Some(original) = self.find_temp_conflict(name, self.scopes.iter()) {
+            self.errors.push(SemanticError::CommandShadowsVariable {
+                name: name.to_string(),
+                span,
+                original,
+            });
+            return;
+        }
+
+        // Register the command
+        self.commands.insert(
+            name.to_string(),
+            CommandInfo { arity, span },
+        );
+
+        // Track for IDE features
+        self.command_declarations.push(CommandDeclaration {
+            name: name.to_string(),
+            params: data.params.clone(),
+            span,
+        });
+    }
+
+    /// Resolve a command call - validate that the command is declared and arity matches
+    fn resolve_command_call(&mut self, data: &CommandCallData) {
+        let name = &data.name;
+        let span = data.span;
+
+        // Resolve argument expressions first
+        for arg in &data.args {
+            self.resolve_expr(arg);
+        }
+
+        // Check if command is declared
+        let Some(info) = self.commands.get(name) else {
+            self.errors.push(SemanticError::UndeclaredCommand {
+                name: name.to_string(),
+                span,
+            });
+            return;
+        };
+
+        // Validate arity
+        let expected = info.arity;
+        let got = data.args.len();
+        if expected != got {
+            self.errors.push(SemanticError::CommandArityMismatch {
+                name: name.to_string(),
+                expected,
+                got,
+                span,
+                declaration_span: info.span,
+            });
+        }
     }
 
     /// Resolve a variable reference - search temp scopes, save variables, then extern variables.

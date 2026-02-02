@@ -1,0 +1,36 @@
+extern player_name
+extern player_gold
+extern give_gold(amount)
+extern take_gold(amount)
+extern play_sound(name)
+extern show_notification(title, message)
+
+Welcome, {player_name}! You have {player_gold} gold.
+
+What would you like to test?
+
+- Test give_gold command
+    give_gold(100)
+    You received 100 gold!
+    Now you have {player_gold} gold.
+
+- Test take_gold command
+    take_gold(50)
+    You spent 50 gold.
+    Now you have {player_gold} gold.
+
+- Test play_sound command
+    play_sound("coin")
+    Did you hear that?
+
+- Test multi-arg command
+    show_notification("Achievement!", "Commands are working!")
+    Notification sent!
+
+- Test command with expression
+    temp bonus = 25
+    give_gold(bonus * 2)
+    You received {bonus * 2} bonus gold!
+    Now you have {player_gold} gold.
+
+Commands test complete!

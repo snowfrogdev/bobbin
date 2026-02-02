@@ -1,0 +1,2 @@
+temp give_gold = 100
+extern give_gold(amount)

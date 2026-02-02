@@ -3,15 +3,77 @@
 //! This module provides infrastructure for running data-driven tests using
 //! sidecar files that specify expected outputs.
 
+// Each test file compiles its own copy of this module, so not all functions
+// are used in every compilation unit. Allow dead code to avoid warnings.
+#![allow(dead_code)]
+
 mod host_state;
 mod storage;
 
-use bobbin_runtime::{HostState, Runtime, Value, VariableStorage};
+use bobbin_runtime::{CommandError, CommandHandler, HostState, Runtime, Value, VariableStorage};
+use std::collections::HashMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 pub use host_state::{EmptyHostState, MockHostState};
 pub use storage::MemoryStorage;
+
+// =============================================================================
+// Mock Command Handler
+// =============================================================================
+
+/// Information about a registered mock command.
+#[derive(Debug, Clone)]
+struct MockCommandInfo {
+    arity: usize,
+}
+
+/// Mock command handler that records invocations for test assertions.
+#[derive(Debug)]
+pub struct MockCommandHandler {
+    /// Registered commands with their arity.
+    registered: HashMap<String, MockCommandInfo>,
+    /// Recorded calls: (command_name, arguments).
+    calls: Mutex<Vec<(String, Vec<Value>)>>,
+}
+
+impl MockCommandHandler {
+    pub fn new() -> Self {
+        Self {
+            registered: HashMap::new(),
+            calls: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Register a command with its expected arity.
+    pub fn register(&mut self, name: &str, arity: usize) {
+        self.registered
+            .insert(name.to_string(), MockCommandInfo { arity });
+    }
+
+    /// Get the recorded calls for assertions.
+    pub fn get_calls(&self) -> Vec<(String, Vec<Value>)> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+impl CommandHandler for MockCommandHandler {
+    fn invoke(&self, name: &str, args: &[Value]) -> Result<(), CommandError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push((name.to_string(), args.to_vec()));
+        Ok(())
+    }
+
+    fn is_registered(&self, name: &str) -> bool {
+        self.registered.contains_key(name)
+    }
+
+    fn arity(&self, name: &str) -> Option<usize> {
+        self.registered.get(name).map(|info| info.arity)
+    }
+}
 
 // =============================================================================
 // Trace File Data Structures
@@ -46,6 +108,8 @@ pub enum Assertion {
     WaitingForChoice,
     /// Assert a variable exists in storage with the given value
     StorageVar { name: String, value: Value },
+    /// Assert a command was called with specific arguments
+    CommandCall { name: String, args: Vec<Value> },
 }
 
 /// An action to perform on the runtime.
@@ -57,6 +121,8 @@ pub enum Action {
     SelectChoice(usize),
     /// Set a host variable value (collected before execution)
     SetHost { name: String, value: Value },
+    /// Register a mock command with its arity (collected before execution)
+    RegisterCommand { name: String, arity: usize },
 }
 
 // =============================================================================
@@ -154,24 +220,40 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
             )
         });
 
-    // Pre-collect host values from trace
+    // Pre-collect host values and command registrations from trace
     let mut host = MockHostState::new();
+    let mut commands = MockCommandHandler::new();
     for step in &trace.steps {
-        if let Step::Action(Action::SetHost { name, value }) = step {
-            host.set(name.clone(), value.clone());
+        match step {
+            Step::Action(Action::SetHost { name, value }) => {
+                host.set(name.clone(), value.clone());
+            }
+            Step::Action(Action::RegisterCommand { name, arity }) => {
+                commands.register(name, *arity);
+            }
+            _ => {}
         }
     }
 
-    // Create runtime with host state
+    // Create runtime with host state and commands
     let storage: Arc<dyn VariableStorage> = Arc::new(MemoryStorage::new());
     let host: Arc<dyn HostState> = Arc::new(host);
-    let mut runtime = Runtime::new(&source, Arc::clone(&storage), Arc::clone(&host))
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to create runtime:\n{}",
-                e.render(case_path.to_str().unwrap_or("<unknown>"), &source)
-            )
-        });
+    let commands: Arc<MockCommandHandler> = Arc::new(commands);
+    let mut runtime = Runtime::with_commands(
+        &source,
+        Arc::clone(&storage),
+        Arc::clone(&host),
+        Arc::clone(&commands) as Arc<dyn CommandHandler>,
+    )
+    .unwrap_or_else(|e| {
+        panic!(
+            "Failed to create runtime:\n{}",
+            e.render(case_path.to_str().unwrap_or("<unknown>"), &source)
+        )
+    });
+
+    // Track command call index for assertions
+    let mut command_call_idx = 0;
 
     for (step_idx, step) in trace.steps.iter().enumerate() {
         match step {
@@ -190,11 +272,47 @@ pub fn run_trace_test(case_path: &Path, path_name: &str) {
                     actual
                 );
             }
+            Step::Assert(Assertion::CommandCall {
+                name: expected_name,
+                args: expected_args,
+            }) => {
+                let calls = commands.get_calls();
+                assert!(
+                    command_call_idx < calls.len(),
+                    "Expected command call '{}' at step {} in {} (path: {}), but only {} calls were recorded",
+                    expected_name,
+                    step_idx,
+                    case_path.display(),
+                    path_name,
+                    calls.len()
+                );
+                let (actual_name, actual_args) = &calls[command_call_idx];
+                assert_eq!(
+                    actual_name, expected_name,
+                    "Command name mismatch at step {} in {} (path: {})\nExpected: {}\nActual: {}",
+                    step_idx,
+                    case_path.display(),
+                    path_name,
+                    expected_name,
+                    actual_name
+                );
+                assert_eq!(
+                    actual_args, expected_args,
+                    "Command args mismatch at step {} in {} (path: {})\nCommand: {}\nExpected: {:?}\nActual: {:?}",
+                    step_idx,
+                    case_path.display(),
+                    path_name,
+                    expected_name,
+                    expected_args,
+                    actual_args
+                );
+                command_call_idx += 1;
+            }
             Step::Assert(assertion) => {
                 execute_runtime_assertion(&runtime, assertion, case_path, path_name, step_idx);
             }
-            Step::Action(Action::SetHost { .. }) => {
-                // Skip - host values were pre-collected before runtime creation
+            Step::Action(Action::SetHost { .. }) | Step::Action(Action::RegisterCommand { .. }) => {
+                // Skip - values were pre-collected before runtime creation
             }
             Step::Action(action) => {
                 execute_action(&mut runtime, action, case_path, path_name, step_idx);
@@ -326,9 +444,14 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
         return Some(Step::Assert(Assertion::Choices(choices)));
     }
 
-    // State assertions: ! done, ! has_more, ! waiting_for_choice
+    // State assertions: ! done, ! has_more, ! waiting_for_choice, ! command name(args)
     if let Some(state) = line.strip_prefix("! ") {
         let state = state.trim();
+        // Check for command assertion: ! command name(args)
+        if let Some(rest) = state.strip_prefix("command ") {
+            let (name, args) = parse_command_call(rest.trim(), line_num);
+            return Some(Step::Assert(Assertion::CommandCall { name, args }));
+        }
         return match state {
             "done" => Some(Step::Assert(Assertion::Done)),
             "has_more" => Some(Step::Assert(Assertion::HasMore)),
@@ -365,6 +488,28 @@ fn parse_step(line: &str, line_num: usize) -> Option<Step> {
             }
             panic!(
                 "Line {}: Invalid host action syntax: {}. Expected: [host name = value]",
+                line_num, inner
+            );
+        }
+        // Command registration: [command name(arity) = mock]
+        if let Some(rest) = inner.strip_prefix("command ") {
+            // Parse "name(arity) = mock"
+            if let Some(eq_pos) = rest.find(" = mock") {
+                let name_arity = rest[..eq_pos].trim();
+                // Parse name(arity)
+                if let Some(paren_start) = name_arity.find('(') {
+                    if let Some(paren_end) = name_arity.find(')') {
+                        let name = name_arity[..paren_start].trim().to_string();
+                        let arity_str = name_arity[paren_start + 1..paren_end].trim();
+                        let arity: usize = arity_str.parse().unwrap_or_else(|_| {
+                            panic!("Line {}: Invalid arity in command: {}", line_num, arity_str)
+                        });
+                        return Some(Step::Action(Action::RegisterCommand { name, arity }));
+                    }
+                }
+            }
+            panic!(
+                "Line {}: Invalid command registration syntax: {}. Expected: [command name(arity) = mock]",
                 line_num, inner
             );
         }
@@ -415,6 +560,59 @@ fn parse_value(s: &str, line_num: usize) -> Value {
         "Line {}: Cannot parse value: {}. Expected string, number, or boolean.",
         line_num, s
     );
+}
+
+/// Parse a command call assertion like `give_gold(100)` or `give_item("sword", 1)`.
+fn parse_command_call(s: &str, line_num: usize) -> (String, Vec<Value>) {
+    // Find the opening paren
+    let paren_start = s
+        .find('(')
+        .unwrap_or_else(|| panic!("Line {}: Invalid command call syntax: {}", line_num, s));
+    let paren_end = s
+        .rfind(')')
+        .unwrap_or_else(|| panic!("Line {}: Invalid command call syntax: {}", line_num, s));
+
+    let name = s[..paren_start].trim().to_string();
+    let args_str = s[paren_start + 1..paren_end].trim();
+
+    // Parse arguments
+    let args = if args_str.is_empty() {
+        Vec::new()
+    } else {
+        parse_arg_list(args_str, line_num)
+    };
+
+    (name, args)
+}
+
+/// Parse a comma-separated list of values, handling quoted strings.
+fn parse_arg_list(s: &str, line_num: usize) -> Vec<Value> {
+    let mut args = Vec::new();
+    let mut current = String::new();
+    let mut in_string = false;
+
+    for c in s.chars() {
+        if c == '"' {
+            in_string = !in_string;
+            current.push(c);
+        } else if c == ',' && !in_string {
+            let arg = current.trim();
+            if !arg.is_empty() {
+                args.push(parse_value(arg, line_num));
+            }
+            current.clear();
+        } else {
+            current.push(c);
+        }
+    }
+
+    // Don't forget the last argument
+    let arg = current.trim();
+    if !arg.is_empty() {
+        args.push(parse_value(arg, line_num));
+    }
+
+    args
 }
 
 // =============================================================================
@@ -490,6 +688,15 @@ fn execute_runtime_assertion(
             // StorageVar assertions are handled inline in run_trace_test
             panic!(
                 "execute_runtime_assertion called with StorageVar at step {} in {} (path: {}). This is a bug - StorageVar should be handled inline.",
+                step_idx,
+                case_path.display(),
+                path_name
+            );
+        }
+        Assertion::CommandCall { .. } => {
+            // CommandCall assertions are handled inline in run_trace_test
+            panic!(
+                "execute_runtime_assertion called with CommandCall at step {} in {} (path: {}). This is a bug - CommandCall should be handled inline.",
                 step_idx,
                 case_path.display(),
                 path_name
@@ -575,6 +782,15 @@ fn execute_assertion(
                 actual
             );
         }
+        Assertion::CommandCall { .. } => {
+            // CommandCall assertions are handled inline in run_trace_test
+            panic!(
+                "execute_assertion called with CommandCall at step {} in {} (path: {}). This is a bug - CommandCall should be handled inline.",
+                step_idx,
+                case_path.display(),
+                path_name
+            );
+        }
     }
 }
 
@@ -611,6 +827,11 @@ fn execute_action(
         }
         Action::SetHost { .. } => {
             // SetHost actions are pre-collected and applied before runtime creation.
+            // They should be skipped in run_trace_test, but we handle them here
+            // for completeness if execute_action is called directly.
+        }
+        Action::RegisterCommand { .. } => {
+            // RegisterCommand actions are pre-collected and applied before runtime creation.
             // They should be skipped in run_trace_test, but we handle them here
             // for completeness if execute_action is called directly.
         }

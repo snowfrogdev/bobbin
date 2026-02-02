@@ -1,0 +1,7 @@
+# Command with zero arguments
+
+--- path: no_args
+[command save_game(0) = mock]
+! command save_game()
+> Game saved!
+! done

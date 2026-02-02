@@ -1,5 +1,5 @@
 use bobbin_runtime::{
-    HostState, Runtime, Value, VariableStorage,
+    CommandError, CommandHandler, HostState, NoopCommandHandler, Runtime, Value, VariableStorage,
     token::{BOOLEAN_LITERALS, KEYWORDS},
 };
 use godot::classes::{
@@ -199,38 +199,134 @@ impl VariableStorage for MemoryStorage {
     }
 }
 
-/// Host state implementation backed by a HashMap.
-/// Thread-safe via RwLock. Game can update values at any time.
-struct VarDictionaryHostState {
-    values: RwLock<HashMap<String, Value>>,
+/// Host state that reads directly from a GDScript Dictionary.
+///
+/// Changes to the dictionary are immediately visible to the runtime,
+/// enabling commands to modify host state without explicit sync.
+///
+/// # Safety
+///
+/// This type implements `Send + Sync` despite containing a `VarDictionary`
+/// (which is not thread-safe) because:
+///
+/// 1. Godot enforces single-threaded access to all engine objects
+/// 2. The `BobbinRuntime` GDExtension class is only accessible from GDScript,
+///    which runs on Godot's main thread
+/// 3. All Bobbin runtime access happens synchronously during dialogue advancement
+/// 4. `VarDictionary` uses internal reference counting, keeping the data alive
+///
+/// **Important:** `BobbinRuntime` must only be used from Godot's main thread.
+struct LiveVarDictionaryHostState {
+    dictionary: VarDictionary,
 }
 
-impl VarDictionaryHostState {
-    fn from_dictionary(dict: &VarDictionary) -> Self {
-        let mut values = HashMap::new();
-        for key in dict.keys_array().iter_shared() {
-            if let Ok(name) = key.try_to::<GString>() {
-                if let Some(val) = dict.get(key.clone()) {
-                    if let Some(value) = variant_to_value(&val) {
-                        values.insert(name.to_string(), value);
-                    }
-                }
-            }
-        }
-        Self {
-            values: RwLock::new(values),
-        }
+impl LiveVarDictionaryHostState {
+    fn new(dictionary: VarDictionary) -> Self {
+        Self { dictionary }
     }
 
-    /// Update a host variable (called by game).
-    fn update(&self, name: &str, value: Value) {
-        self.values.write().unwrap().insert(name.to_string(), value);
+    /// Returns a clone of the underlying dictionary.
+    ///
+    /// VarDictionary::clone() is cheap - it creates a shared reference
+    /// (not a deep copy) due to Godot's Copy-on-Write semantics.
+    fn dictionary(&self) -> VarDictionary {
+        self.dictionary.clone()
     }
 }
 
-impl HostState for VarDictionaryHostState {
+impl HostState for LiveVarDictionaryHostState {
     fn lookup(&self, name: &str) -> Option<Value> {
-        self.values.read().unwrap().get(name).cloned()
+        let key = GString::from(name);
+        // VarDictionary::get() returns Option<Variant> - None means key missing
+        let variant = self.dictionary.get(key)?;
+        // Convert Variant to Value (returns None for unsupported types)
+        variant_to_value(&variant)
+    }
+}
+
+// SAFETY: See struct-level documentation for safety justification.
+// This mirrors the pattern used for GodotCommandHandler.
+unsafe impl Send for LiveVarDictionaryHostState {}
+unsafe impl Sync for LiveVarDictionaryHostState {}
+
+// =============================================================================
+// Command Handler Implementation
+// =============================================================================
+
+/// Metadata for a registered command.
+struct CommandMeta {
+    /// The GDScript callable to invoke.
+    callable: Callable,
+    /// Expected number of arguments.
+    arity: usize,
+}
+
+/// Command handler implementation backed by GDScript callables.
+///
+/// # Safety
+///
+/// Godot's `Callable` contains raw pointers that aren't `Send`/`Sync`, but Godot
+/// itself is single-threaded (all operations must happen on the main thread).
+/// The `CommandHandler` trait requires `Send + Sync` for use in `Arc`, but in
+/// practice the Bobbin runtime and its command handler are only ever accessed
+/// from Godot's main thread.
+///
+/// This is safe because:
+/// 1. Godot enforces single-threaded access to all game objects
+/// 2. The `BobbinRuntime` GDExtension class is only accessible from GDScript
+/// 3. All command invocations happen synchronously during dialogue advancement
+struct GodotCommandHandler {
+    commands: RwLock<HashMap<String, CommandMeta>>,
+}
+
+// SAFETY: See GodotCommandHandler documentation above. Godot is single-threaded.
+unsafe impl Send for GodotCommandHandler {}
+unsafe impl Sync for GodotCommandHandler {}
+
+impl GodotCommandHandler {
+    fn new(commands: HashMap<String, CommandMeta>) -> Self {
+        Self {
+            commands: RwLock::new(commands),
+        }
+    }
+}
+
+impl CommandHandler for GodotCommandHandler {
+    fn invoke(&self, name: &str, args: &[Value]) -> Result<(), CommandError> {
+        let commands = self.commands.read().unwrap();
+        let meta = commands
+            .get(name)
+            .ok_or_else(|| CommandError::UnknownCommand(name.to_string()))?;
+
+        // Convert Bobbin values to Godot variants
+        let mut godot_args = VarArray::new();
+        for arg in args {
+            godot_args.push(&value_to_variant(arg));
+        }
+
+        // Wrap the args array in another array for callv
+        // GDScript handlers expect: func(args: Array) where args = [arg1, arg2, ...]
+        // callv spreads its argument array, so we need [[arg1, arg2, ...]] to pass [arg1, arg2, ...]
+        let mut wrapper = VarArray::new();
+        wrapper.push(&godot_args.to_variant());
+
+        // Invoke the callable
+        // Note: Callable.callv() does not return errors in a way we can capture,
+        // so we trust the GDScript side to handle errors appropriately
+        meta.callable.callv(&wrapper);
+        Ok(())
+    }
+
+    fn is_registered(&self, name: &str) -> bool {
+        self.commands.read().unwrap().contains_key(name)
+    }
+
+    fn arity(&self, name: &str) -> Option<usize> {
+        self.commands
+            .read()
+            .unwrap()
+            .get(name)
+            .map(|m| m.arity)
     }
 }
 
@@ -1132,8 +1228,10 @@ mod syntax_colors {
             | TokenKind::Star
             | TokenKind::Slash
             | TokenKind::Percent => Some(operator()),
-            // Parentheses
-            TokenKind::OpenParen | TokenKind::CloseParen => Some(interpolation()),
+            // Parentheses and comma (for command calls)
+            TokenKind::OpenParen | TokenKind::CloseParen | TokenKind::Comma => {
+                Some(interpolation())
+            }
             _ => None,
         }
     }
@@ -1308,7 +1406,8 @@ struct HotReloadState {
 pub struct BobbinRuntime {
     base: Base<RefCounted>,
     storage: Arc<MemoryStorage>,
-    host: Arc<VarDictionaryHostState>,
+    host: Arc<LiveVarDictionaryHostState>,
+    commands: Arc<dyn CommandHandler>,
     inner: Runtime,
     /// Hot reload state (None for string-based or release builds).
     hot_reload: Option<HotReloadState>,
@@ -1348,6 +1447,7 @@ impl BobbinRuntime {
             GString::from("<script>"),
             saved_variables,
             host_state,
+            VarDictionary::new(),
         )
     }
 
@@ -1362,22 +1462,56 @@ impl BobbinRuntime {
         saved_variables: VarDictionary,
         host_state: VarDictionary,
     ) -> Option<Gd<Self>> {
+        Self::from_file_with_config(path, saved_variables, host_state, VarDictionary::new())
+    }
+
+    /// Create runtime from script content with full configuration including commands.
+    ///
+    /// Commands dictionary maps command names to GDScript Callables.
+    /// Example: `{ "give_gold": func(args): player.gold += int(args[0]) }`
+    #[func]
+    fn from_string_with_config(
+        content: GString,
+        saved_variables: VarDictionary,
+        host_state: VarDictionary,
+        commands: VarDictionary,
+    ) -> Option<Gd<Self>> {
+        Self::build_runtime(
+            content.to_string(),
+            GString::from("<script>"),
+            saved_variables,
+            host_state,
+            commands,
+        )
+    }
+
+    /// Create runtime from a .bobbin file path with full configuration including commands.
+    ///
+    /// Commands dictionary maps command names to GDScript Callables.
+    /// Example: `{ "give_gold": func(args): player.gold += int(args[0]) }`
+    #[func]
+    fn from_file_with_config(
+        path: GString,
+        saved_variables: VarDictionary,
+        host_state: VarDictionary,
+        commands: VarDictionary,
+    ) -> Option<Gd<Self>> {
         let Some(resource) = ResourceLoader::singleton()
             .load_ex(&path)
             .type_hint("BobbinScript")
             .done()
         else {
-            godot_error!("BobbinRuntime::from_file_with_state: Failed to load {}", path);
+            godot_error!("BobbinRuntime::from_file_with_config: Failed to load {}", path);
             return None;
         };
 
         let Ok(script) = resource.try_cast::<BobbinScript>() else {
-            godot_error!("BobbinRuntime::from_file_with_state: {} is not a BobbinScript", path);
+            godot_error!("BobbinRuntime::from_file_with_config: {} is not a BobbinScript", path);
             return None;
         };
 
         let source = script.bind().get_source_code().to_string();
-        Self::build_runtime(source, path, saved_variables, host_state)
+        Self::build_runtime(source, path, saved_variables, host_state, commands)
     }
 
     // =========================================================================
@@ -1406,13 +1540,48 @@ impl BobbinRuntime {
         path: GString,
         saved_variables: VarDictionary,
         host_state: VarDictionary,
+        commands_dict: VarDictionary,
     ) -> Option<Gd<Self>> {
         let storage = Arc::new(MemoryStorage::new());
-        let host = Arc::new(VarDictionaryHostState::from_dictionary(&host_state));
+        // Use live dictionary reference instead of copying values into a HashMap.
+        // VarDictionary::clone() creates a shared reference (not a deep copy)
+        // due to Godot's Copy-on-Write semantics.
+        let host = Arc::new(LiveVarDictionaryHostState::new(host_state.clone()));
 
         prepopulate_storage(&storage, &saved_variables);
 
-        match Runtime::new(&source, storage.clone(), host.clone()) {
+        // Build command handler from dictionary
+        // Format: { "command_name": callable } where arity is determined by script declaration
+        let commands: Arc<dyn CommandHandler> = if commands_dict.is_empty() {
+            Arc::new(NoopCommandHandler)
+        } else {
+            let mut command_map: HashMap<String, CommandMeta> = HashMap::new();
+            for (key, value) in commands_dict.iter_shared() {
+                let Some(name) = key.try_to::<GString>().ok() else {
+                    godot_warn!("build_runtime: Ignoring non-string command key");
+                    continue;
+                };
+                let Some(callable) = value.try_to::<Callable>().ok() else {
+                    godot_warn!(
+                        "build_runtime: Command '{}' value is not a Callable",
+                        name
+                    );
+                    continue;
+                };
+                // Arity is validated at compile time via extern declaration
+                // The handler just needs to store the callable
+                command_map.insert(
+                    name.to_string(),
+                    CommandMeta {
+                        callable,
+                        arity: 0, // Not used - compile-time validation handles arity
+                    },
+                );
+            }
+            Arc::new(GodotCommandHandler::new(command_map))
+        };
+
+        match Runtime::with_commands(&source, storage.clone(), host.clone(), commands.clone()) {
             Ok(runtime) => {
                 let hot_reload = if Os::singleton().is_debug_build() {
                     let last_modified = FileAccess::get_modified_time(&path);
@@ -1429,6 +1598,7 @@ impl BobbinRuntime {
                     base,
                     storage,
                     host,
+                    commands,
                     inner: runtime,
                     hot_reload,
                 });
@@ -1456,7 +1626,7 @@ impl BobbinRuntime {
     #[signal]
     fn reload_failed(error_message: GString);
 
-    /// Reload with new source code. Preserves save variables.
+    /// Reload with new source code. Preserves save variables and commands.
     #[func]
     fn reload(&mut self, new_source: GString) -> bool {
         let source_str = new_source.to_string();
@@ -1468,8 +1638,9 @@ impl BobbinRuntime {
 
         let storage_dyn: Arc<dyn VariableStorage> = self.storage.clone();
         let host_dyn: Arc<dyn HostState> = self.host.clone();
+        let commands = self.commands.clone();
 
-        match Runtime::new(&source_str, storage_dyn, host_dyn) {
+        match Runtime::with_commands(&source_str, storage_dyn, host_dyn, commands) {
             Ok(new_runtime) => {
                 self.inner = new_runtime;
                 self.base_mut()
@@ -1653,12 +1824,16 @@ impl BobbinRuntime {
         dict
     }
 
-    /// Update a host variable (game state changed).
+    /// Updates a host variable value.
+    ///
+    /// With live host state, updating the `host_state` dictionary directly
+    /// from GDScript has the same effect - this method is provided for
+    /// convenience and API consistency.
     #[func]
-    fn update_host_variable(&self, name: GString, value: Variant) {
-        if let Some(val) = variant_to_value(&value) {
-            self.host.update(&name.to_string(), val);
-        }
+    fn update_host_variable(&mut self, name: GString, value: Variant) {
+        // Get a mutable handle to the shared dictionary and set the value
+        let mut dict = self.host.dictionary();
+        dict.set(name, value);
     }
 }
 

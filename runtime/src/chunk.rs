@@ -78,6 +78,11 @@ pub enum Instruction {
     Or,
     /// Pop one bool, push logical NOT result.
     Not,
+    /// Pop `arg_count` values, invoke command handler with name and args.
+    Command {
+        name: String,
+        arg_count: u8,
+    },
     Return,
 }
 

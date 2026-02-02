@@ -1,0 +1,7 @@
+# Command with expression arguments
+
+--- path: with_expressions
+[command give_gold(1) = mock]
+! command give_gold(110)
+> You got bonus gold!
+! done

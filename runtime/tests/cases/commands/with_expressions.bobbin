@@ -1,0 +1,5 @@
+extern give_gold(amount)
+temp bonus = 10
+
+give_gold(100 + bonus)
+You got bonus gold!

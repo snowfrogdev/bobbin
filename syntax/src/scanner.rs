@@ -150,6 +150,13 @@ impl<'a> Scanner<'a> {
             return Ok(tok);
         }
 
+        // Check for command invocation: identifier followed by (
+        if self.is_command_invocation() {
+            // Scan the identifier, then Condition mode will handle the argument list
+            self.mode = ScanMode::Condition;
+            return self.scan_identifier();
+        }
+
         // Otherwise it's text content
         self.mode = ScanMode::Text;
         self.scan_text_content()
@@ -237,7 +244,7 @@ impl<'a> Scanner<'a> {
         Err(self.error("Unexpected character in declaration"))
     }
 
-    /// Scan extern declaration content: identifier only (no initializer)
+    /// Scan extern declaration content: identifier only (for variables) or identifier(params) (for commands)
     fn scan_extern_declaration(&mut self) -> Result<Token<'a>, LexicalError> {
         self.skip_spaces();
         self.start = self.current;
@@ -247,9 +254,42 @@ impl<'a> Scanner<'a> {
         }
 
         let c = self.peek().unwrap();
-        if c.is_ascii_alphabetic() || c == '_' {
+
+        // Handle tokens after the identifier: ( ) , for command parameter lists
+        if c == '(' {
+            self.advance();
+            // Stay in ExternDeclaration mode to continue scanning parameters
+            return Ok(self.make_token(TokenKind::OpenParen));
+        }
+
+        if c == ')' {
+            self.advance();
+            // After closing paren, we're done with the extern declaration
             self.mode = ScanMode::LineStart;
-            return self.scan_identifier();
+            return Ok(self.make_token(TokenKind::CloseParen));
+        }
+
+        if c == ',' {
+            self.advance();
+            // Stay in ExternDeclaration mode for more parameters
+            return Ok(self.make_token(TokenKind::Comma));
+        }
+
+        if c.is_ascii_alphabetic() || c == '_' {
+            // Scan identifier but don't transition mode yet - wait to see what follows
+            let token = self.scan_identifier()?;
+            self.skip_spaces();
+            // Check what follows this identifier:
+            // - `(` means command declaration, stay in ExternDeclaration to scan params
+            // - `)` or `,` means we're inside a param list, stay in ExternDeclaration
+            // - newline or end means variable declaration, go back to LineStart
+            let next = self.peek();
+            if next != Some('(') && next != Some(')') && next != Some(',') {
+                // This is a variable declaration (no params), go back to LineStart
+                self.mode = ScanMode::LineStart;
+            }
+            // Otherwise stay in ExternDeclaration mode to handle the parameter list
+            return Ok(token);
         }
 
         // Error recovery: advance past the invalid character to avoid infinite loop
@@ -347,6 +387,12 @@ impl<'a> Scanner<'a> {
         if current_char == ')' {
             self.advance();
             return Ok(self.make_token(TokenKind::CloseParen));
+        }
+
+        // Comma for argument lists
+        if current_char == ',' {
+            self.advance();
+            return Ok(self.make_token(TokenKind::Comma));
         }
 
         // Reject lone = with helpful error
@@ -811,6 +857,29 @@ impl<'a> Scanner<'a> {
         while self.peek() == Some(' ') {
             self.advance();
         }
+    }
+
+    /// Check if current position looks like a command invocation: identifier(
+    fn is_command_invocation(&self) -> bool {
+        let remaining = &self.source[self.current..];
+
+        // Must start with letter or underscore (identifier start)
+        let first_char = remaining.chars().next();
+        if !first_char.is_some_and(|c| c.is_ascii_alphabetic() || c == '_') {
+            return false;
+        }
+
+        // Find the end of the identifier
+        let ident_end = remaining
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .map(|c| c.len_utf8())
+            .sum::<usize>();
+
+        // Check if immediately followed by ( (possibly with spaces)
+        let after_ident = &remaining[ident_end..];
+        let after_spaces = after_ident.trim_start_matches(' ');
+        after_spaces.starts_with('(')
     }
 
     fn make_token(&self, kind: TokenKind) -> Token<'a> {

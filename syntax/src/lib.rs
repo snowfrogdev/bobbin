@@ -17,15 +17,18 @@ pub mod scanner;
 pub mod token;
 
 pub use ast::{
-    BinaryOp, Choice, Expr, ExternDeclData, Literal, NodeId, Script, Stmt, TextPart, UnaryOp,
-    VarBindingData,
+    BinaryOp, Choice, CommandCallData, Expr, ExternCommandDeclData, ExternDeclData, Literal,
+    NodeId, Script, Stmt, TextPart, UnaryOp, VarBindingData,
 };
 pub use diagnostic::{
     AriadneRenderer, Diagnostic, DiagnosticContext, IntoDiagnostic, JaroWinklerMatcher, Label,
     LabelStyle, LineIndex, Matcher, Renderer, Severity, SourcePosition, Suggestion,
 };
 pub use parser::{ParseError, Parser};
-pub use resolver::{Resolver, SemanticError, SymbolTable, ValueType, VariableDeclaration, VariableKind};
+pub use resolver::{
+    CommandDeclaration, Resolver, SemanticError, SymbolTable, ValueType, VariableDeclaration,
+    VariableKind,
+};
 pub use scanner::{LexicalError, Scanner};
 pub use token::{BOOLEAN_LITERALS, KEYWORDS, Span, Token, TokenKind};
 
@@ -36,6 +39,8 @@ pub struct AnalysisResult {
     pub diagnostics: Vec<Diagnostic>,
     /// All variable declarations found (available even with errors)
     pub declarations: Vec<VariableDeclaration>,
+    /// All command declarations found (available even with errors)
+    pub commands: Vec<CommandDeclaration>,
 }
 
 /// Analyze source code and return diagnostics and declarations.
@@ -66,14 +71,15 @@ pub fn analyze(source: &str) -> AnalysisResult {
         Err(errors) => return make_parse_error_result(errors),
     };
 
-    let (result, declarations, known_variables) = Resolver::new(&ast).analyze();
+    let (result, declarations, commands, known_variables) = Resolver::new(&ast).analyze();
 
     match result {
         Ok(_) => AnalysisResult {
             diagnostics: vec![],
             declarations,
+            commands,
         },
-        Err(errors) => make_semantic_error_result(errors, declarations, &known_variables),
+        Err(errors) => make_semantic_error_result(errors, declarations, commands, &known_variables),
     }
 }
 
@@ -86,12 +92,14 @@ fn make_parse_error_result(errors: Vec<ParseError>) -> AnalysisResult {
             .map(|e| e.into_diagnostic(&context))
             .collect(),
         declarations: vec![],
+        commands: vec![],
     }
 }
 
 fn make_semantic_error_result(
     errors: Vec<SemanticError>,
     declarations: Vec<VariableDeclaration>,
+    commands: Vec<CommandDeclaration>,
     known_variables: &[String],
 ) -> AnalysisResult {
     let matcher = JaroWinklerMatcher::default();
@@ -102,6 +110,7 @@ fn make_semantic_error_result(
             .map(|e| e.into_diagnostic(&context))
             .collect(),
         declarations,
+        commands,
     }
 }
 

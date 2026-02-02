@@ -1,0 +1,5 @@
+extern give_gold(amount)
+
+Hello!
+give_gold(100)
+Goodbye!

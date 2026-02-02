@@ -1,0 +1,14 @@
+# Commands mixed with dialogue and extern variables
+
+--- path: mixed_with_dialogue
+[host player_name = "Hero"]
+[command give_gold(1) = mock]
+[command play_sound(1) = mock]
+> Welcome, Hero!
+[advance]
+! command play_sound("fanfare")
+> Here's your reward.
+[advance]
+! command give_gold(50)
+> Goodbye!
+! done

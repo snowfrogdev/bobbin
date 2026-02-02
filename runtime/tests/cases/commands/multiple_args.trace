@@ -1,0 +1,7 @@
+# Command with multiple arguments
+
+--- path: multiple_args
+[command give_item(2) = mock]
+! command give_item("sword", 1)
+> You got a sword!
+! done

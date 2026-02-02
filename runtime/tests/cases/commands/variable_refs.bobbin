@@ -1,0 +1,6 @@
+extern give_gold(amount)
+save player_level = 10
+temp bonus_multiplier = 5
+
+give_gold(player_level * bonus_multiplier)
+You got level-scaled gold!

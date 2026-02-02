@@ -13,6 +13,7 @@ pub use bobbin_syntax::{
 };
 // Re-export local types
 pub use crate::chunk::Value;
+pub use crate::commands::{CommandError, CommandHandler, NoopCommandHandler};
 pub use crate::storage::{HostState, VariableStorage};
 pub use crate::vm::RuntimeError;
 
@@ -28,6 +29,7 @@ pub mod token {
 }
 
 mod chunk;
+mod commands;
 mod compiler;
 mod storage;
 mod vm;
@@ -210,14 +212,48 @@ impl Runtime {
         storage: Arc<dyn VariableStorage>,
         host: Arc<dyn HostState>,
     ) -> Result<Self, BobbinError> {
+        Self::with_commands(
+            script,
+            storage,
+            host,
+            Arc::new(NoopCommandHandler),
+        )
+    }
+
+    /// Create a new runtime with the given storage, host state, and command handler.
+    ///
+    /// This is the full constructor that allows configuring command handlers for
+    /// scripts that use command invocations.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use std::sync::Arc;
+    ///
+    /// let storage = Arc::new(MemoryStorage::new());
+    /// let host = Arc::new(EmptyHostState);
+    /// let commands = Arc::new(MyCommandHandler::new());
+    /// let mut runtime = Runtime::with_commands(
+    ///     script,
+    ///     Arc::clone(&storage),
+    ///     Arc::clone(&host),
+    ///     commands,
+    /// )?;
+    /// ```
+    pub fn with_commands(
+        script: &str,
+        storage: Arc<dyn VariableStorage>,
+        host: Arc<dyn HostState>,
+        commands: Arc<dyn CommandHandler>,
+    ) -> Result<Self, BobbinError> {
         let tokens = Scanner::new(script).tokens();
         let ast = Parser::new(tokens).parse()?;
-        let (result, _declarations, known_variables) = Resolver::new(&ast).analyze();
+        let (result, _declarations, _commands, known_variables) = Resolver::new(&ast).analyze();
         let symbols = result.map_err(|errors| (errors, known_variables))?;
         let chunk = Compiler::new(&ast, &symbols).compile()?;
 
         let mut runtime = Self {
-            vm: VM::new(chunk, Arc::clone(&storage), Arc::clone(&host)),
+            vm: VM::new(chunk, Arc::clone(&storage), Arc::clone(&host), commands),
             storage,
             host,
             current_line: None,
