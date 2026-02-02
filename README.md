@@ -62,6 +62,7 @@ Farewell, {player_name}! You have {gold} gold remaining.
 - **Conditional logic** — `if`/`elseif`/`else` with full expression support
 - **Expressions everywhere** — Arithmetic, comparison, and logical operators in assignments and interpolations
 - **String interpolation** — Embed variables and expressions in dialogue with `{variable}` or `{a + b}`
+- **Commands** — Trigger game effects like `give_item("sword", 1)` with compile-time validation
 - **Rich error messages** — Rust-quality diagnostics that point to exactly what went wrong
 - **Fast & lightweight** — Rust-powered runtime, instant parsing
 - **Cross-platform** — Linux, Windows, macOS, and WASM (web exports)
@@ -77,9 +78,13 @@ Farewell, {player_name}! You have {gold} gold remaining.
 ### Quick Start
 
 ```gdscript
-# Create runtime with extern variables
-var host_state = { "player_name": "Ada" }
-var runtime = BobbinRuntime.from_string_with_host(script_content, host_state)
+# Create runtime with host state and commands
+var runtime = Bobbin.create("res://dialogue/intro.bobbin", {}, {
+    "player_name": "Ada",
+    "gold": 100,
+}, {
+    "give_item": func(args): inventory.add(args[0], int(args[1])),
+})
 
 # Main dialogue loop
 while runtime.has_more():
@@ -97,7 +102,6 @@ while runtime.has_more():
 
 - Character/speaker management
 - Localization support
-- Event triggering/callbacks
 - Visit tracking for choices
 
 ## Contributing

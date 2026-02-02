@@ -15,6 +15,10 @@ temp mood = "friendly"
 extern player_name
 extern gold
 
+# Commands (trigger game effects)
+extern give_item(name, count)
+extern play_sound(name)
+
 Hello, {player_name}!
 
 - Ask about wares
@@ -22,6 +26,8 @@ Hello, {player_name}!
     I have potions and scrolls.
     - Buy potion (10 gold)
         if gold >= 10
+            give_item("potion", 1)
+            play_sound("purchase")
             You purchase the potion.
         else
             You can't afford that.
@@ -38,8 +44,19 @@ Hello, {player_name}!
 ## Using in Godot
 
 ```gdscript
-# Create a runtime
-var runtime = Bobbin.create("res://dialogue/intro.bobbin")
+# Create a runtime with host state and commands
+var runtime = Bobbin.create(
+    "res://dialogue/intro.bobbin",
+    {},  # saved_variables (for restoring from save games)
+    {    # host_state (extern variables)
+        "player_name": "Hero",
+        "gold": 100,
+    },
+    {    # commands (game effect handlers)
+        "give_item": func(args): inventory.add(args[0], int(args[1])),
+        "play_sound": func(args): AudioManager.play(args[0]),
+    }
+)
 
 while runtime.has_more():
     if runtime.is_waiting_for_choice():
@@ -49,12 +66,6 @@ while runtime.has_more():
     else:
         print(runtime.current_line())
         runtime.advance()
-
-# With host state (pass game variables to dialogue)
-var runtime = Bobbin.create_with_host("res://dialogue/intro.bobbin", {
-    "player_name": "Hero",
-    "gold": 100
-})
 ```
 
 ## Editor Settings

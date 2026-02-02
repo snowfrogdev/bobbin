@@ -169,18 +169,21 @@ If the host doesn't provide a declared extern variable at runtime, `RuntimeError
 
 ### Dialogue-to-Host Effects
 
-For cases where dialogue should affect host state (giving items, triggering events), the recommended pattern is **commands/events** rather than direct writes:
+For cases where dialogue should affect host state (giving items, triggering events), use **commands** rather than direct writes:
 
 ```bobbin
+extern give_gold(amount)
+extern trigger_event(name)
+
 # Instead of:
 set gold = gold + 100        # Would bypass host's economy logic (and is a semantic error for extern)
 
-# Use commands (syntax TBD):
+# Use commands:
 give_gold(100)               # Host implements the command
 trigger_event("quest_complete")
 ```
 
-Commands ensure the host maintains control of its state while allowing dialogue to request effects. The exact syntax is deferred to a future ADR.
+Commands ensure the host maintains control of its state while allowing dialogue to request effects. See ADR-0005 for the complete commands design.
 
 ### Consequences
 
@@ -192,7 +195,6 @@ Commands ensure the host maintains control of its state while allowing dialogue 
 - Good, because `extern` declarations make host dependencies explicit and self-documenting
 - Bad, because two interfaces require slightly more integration work than one
 - Bad, because runtime type verification adds overhead (minimal in practice)
-- Neutral, because commands for host effects require a future design decision
 
 ## Pros and Cons of the Options
 
@@ -249,4 +251,4 @@ This prevents save games from resetting progress when dialogue files reload.
 
 - ADR-0002: Variable and State Management (establishes the three-tier model)
 - ADR-0003: Variable Modification Syntax (covers `set` keyword)
-- Future ADR: Command syntax for dialogue-to-host effects
+- ADR-0005: Commands System (dialogue-to-host effects)
