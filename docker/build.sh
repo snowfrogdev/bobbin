@@ -65,9 +65,10 @@ case "$TARGET" in
         export BINDGEN_EXTRA_CLANG_ARGS="--sysroot=$EMSDK/upstream/emscripten/cache/sysroot"
         # Set rustflags for WASM target (side module for Godot)
         export CARGO_TARGET_WASM32_UNKNOWN_EMSCRIPTEN_RUSTFLAGS="-C link-args=-pthread -C target-feature=+atomics -C link-args=-sSIDE_MODULE=2 -C panic=abort -Zlink-native-libraries=no -Cllvm-args=-enable-emscripten-cxx-exceptions=0"
-        # Use 'wasm' profile (size-optimized, no LTO - LTO + build-std exceeds CI memory)
+        # Use 'wasm' profile (size-optimized, no LTO)
+        # Note: -Zbuild-std is no longer supported with wasm32-unknown-emscripten target
         cargo +nightly build --manifest-path bindings/godot/Cargo.toml \
-            --target-dir target --profile wasm -Zbuild-std=std,panic_abort --target wasm32-unknown-emscripten
+            --target-dir target --profile wasm --target wasm32-unknown-emscripten
         # Run wasm-opt for aggressive size optimization (more efficient than LTO for WASM)
         WASM_FILE="target/wasm32-unknown-emscripten/wasm/bobbin_godot.wasm"
         WASM_OPT="$EMSDK/upstream/bin/wasm-opt"
